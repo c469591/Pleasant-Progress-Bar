@@ -171,8 +171,8 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
         # 音效參數
         self.min_frequency = 110
         self.max_frequency = 1760
-        self.mapped_min_freq = 200
-        self.mapped_max_freq = 1200
+        self.mapped_min_freq = 150
+        self.mapped_max_freq = 1500
         
         # 音頻生成參數
         self.audio_duration = 0.08  # 80ms播放時長
@@ -285,7 +285,7 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
                         self.last_played_id = self.play_id
                 
                 # 循環延遲：100ms，大於80ms播放時長，確保不重疊
-                time.sleep(0.1)
+                time.sleep(0.12)
                 
             except Exception as e:
                 print(f"守護線程循環錯誤: {e}")
@@ -320,7 +320,52 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
             
         except Exception as e:
             print(f"音頻播放執行錯誤: {e}")
-    
+
+    def execute_audio_play(self, original_hz):
+        """在守護線程中執行音頻播放"""
+        try:
+            # 頻率映射：110-1760Hz → 200-1200Hz
+            progress = (original_hz - self.min_frequency) / (self.max_frequency - self.min_frequency)
+            progress = max(0.0, min(1.0, progress))
+            mapped_freq = self.mapped_min_freq + progress * (self.mapped_max_freq - self.mapped_min_freq)
+            
+            # 生成音頻數據
+            audio_array = self.generate_clean_sine_wave(
+                frequency=mapped_freq,
+                duration=self.audio_duration,
+                sample_rate=self.sample_rate,
+                volume=0.25
+            )
+            
+            # 播放音頻
+            if self.enabled and self.stream_initialized and self.audio_stream:
+                try:
+                    # 檢查流是否仍然活躍
+                    if hasattr(self.audio_stream, 'is_active') and not self.audio_stream.is_active():
+                        print("警告：音頻流不活躍，嘗試重新初始化")
+                        self.cleanup_audio_resources()
+                        self.init_audio_stream()
+                    
+                    if self.audio_stream:
+                        self.audio_stream.write(audio_array.tobytes())
+                        
+                        if self.debug_mode:
+                            progress_percent = progress * 100
+                            print(f"守護線程執行播放: {original_hz}Hz → {mapped_freq:.1f}Hz (進度: {progress_percent:.1f}%)")
+                            
+                except Exception as stream_error:
+                    print(f"音頻流寫入錯誤: {stream_error}")
+                    # 嘗試重新初始化音頻流
+                    try:
+                        self.cleanup_audio_resources()
+                        self.init_audio_stream()
+                        print("音頻流重新初始化完成")
+                    except Exception as init_error:
+                        print(f"音頻流重新初始化失敗: {init_error}")
+            
+        except Exception as e:
+            print(f"音頻播放執行錯誤: {e}")
+
     # 請求播放回調函數（從攔截函數調用）
     def request_audio_play(self, frequency):
         """請求播放音頻：設置屬性，由守護線程檢查和播放"""
@@ -380,7 +425,7 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
             self.original_beep(hz, length, left, right)
     
     # 純Python生成正弦波（保持不變）
-    def old_generate_clean_sine_wave(self, frequency, duration=0.08, sample_rate=44100, volume=0.6):
+    def generate_clean_sine_wave(self, frequency, duration=0.08, sample_rate=44100, volume=0.6):
         """純Python生成乾淨的正弦波音效"""
         samples = int(sample_rate * duration)
         audio_array = array.array('h')
@@ -408,7 +453,7 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
         
         return audio_array
 
-    def generate_clean_sine_wave(self, frequency, duration=0.08, sample_rate=44100, volume=0.35):
+    def newgenerate_clean_sine_wave(self, frequency, duration=0.08, sample_rate=44100, volume=0.35):
         """純Python生成乾淨的正弦波音效（高斯淡入淡出版本）"""
         samples = int(sample_rate * duration)
         audio_array = array.array('h')
