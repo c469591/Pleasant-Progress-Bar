@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# 正弦波進度條音效插件 - 32位優化版本 + 音頻緩存
+# 悅耳進度條 - 32位優化版本
 # 針對NVDA 32位環境優化，解決報音和雙音調問題，並使用音頻緩存提升性能
 
 import globalPluginHandler
@@ -32,15 +32,15 @@ def align_audio_buffer_32bit(audio_array):
         
         return audio_array
     except Exception as e:
-        print(f"32位音頻緩衝區對齊錯誤: {e}")
+        print(f"悅耳進度條：32位音頻緩衝區對齊錯誤: {e}")
         return audio_array
 
 # =============================================================================
-# 內嵌PyAudio代碼（保持不變）
+# 內嵌PyAudio代碼
 # =============================================================================
 
 plugin_dir = os.path.dirname(__file__)
-print(f"插件目錄: {plugin_dir}")
+print(f"悅耳進度條：插件目錄: {plugin_dir}")
 
 try:
     if plugin_dir not in sys.path:
@@ -48,9 +48,9 @@ try:
     
     import _portaudio as pa
     PYAUDIO_AVAILABLE = True
-    print("✓ _portaudio模塊載入成功（32位優化模式）")
+    print("悅耳進度條：✓ _portaudio模塊載入成功（32位優化模式）")
 except ImportError as e:
-    print(f"✗ 無法導入_portaudio模塊: {e}")
+    print(f"悅耳進度條：✗ 無法導入_portaudio模塊: {e}")
     pa = None
     PYAUDIO_AVAILABLE = False
 
@@ -171,12 +171,20 @@ if PYAUDIO_AVAILABLE:
             self._streams.add(stream)
             return stream
         
+        def get_default_output_device_info(self):
+            """獲取默認輸出設備信息"""
+            return pa.get_default_output_device_info()
+
+        def get_device_info_by_index(self, device_index):
+            """根據索引獲取設備信息"""
+            return pa.get_device_info_by_index(device_index)
+        
         def _remove_stream(self, stream):
             if stream in self._streams:
                 self._streams.remove(stream)
 
 # =============================================================================
-# 核心插件類 - 32位優化版本 + 音頻緩存
+# 核心插件類 - 悅耳進度條
 # =============================================================================
 
 class GlobalPlugin(globalPluginHandler.GlobalPlugin):
@@ -193,14 +201,16 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
         # 音效參數
         self.min_frequency = 110
         self.max_frequency = 1760
-        self.mapped_min_freq = 150
-        self.mapped_max_freq = 1500
+        self.mapped_min_freq = 110
+        self.mapped_max_freq = 1760
         
         # 32位優化的音頻生成參數
         self.audio_duration = 0.08  # 80ms播放時長
         self.fade_ratio = 0.45
-        self.sample_rate = 48000
         self.volume = 0.5  # 32位系統音量
+        
+        # 檢測設備最佳音頻參數
+        self.detect_optimal_audio_params()
         
         # 32位優化配置
         self.frames_per_buffer = 1024  # 從4096降低到1024
@@ -211,7 +221,7 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
         self.audio_cache = {}  # 頻率 -> 音頻數據的緩存字典
         self.cache_hits = 0    # 緩存命中次數統計
         self.cache_misses = 0  # 緩存未命中次數統計
-        self.max_cache_size = 50  # 最大緩存條目數量
+        self.max_cache_size = 300  # 最大緩存條目數量
         
         # 守護線程屬性檢查機制
         self.audio_thread = None
@@ -240,16 +250,16 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
         
         # 顯示插件狀態
         pyaudio_status = "可用" if PYAUDIO_AVAILABLE else "不可用"
-        print(f"正弦波進度條音效插件已啟動（32位優化 + 音頻緩存）")
-        print(f"內嵌PyAudio: {pyaudio_status}")
-        print(f"緩衝區配置: {self.frames_per_buffer} frames")
-        print(f"音量調整: {self.volume:.2f}")
-        print(f"溢出保護: {'啟用' if not self.exception_on_overflow else '停用'}")
-        print(f"線程間隔: {self.thread_sleep_interval*1000:.0f}ms")
-        print(f"音頻緩存: 最大 {self.max_cache_size} 條目")
+        print(f"悅耳進度條：已啟動（32位優化 + 音頻緩存）")
+        print(f"悅耳進度條：內嵌PyAudio: {pyaudio_status}")
+        print(f"悅耳進度條：緩衝區配置: {self.frames_per_buffer} frames")
+        print(f"悅耳進度條：音量調整: {self.volume:.2f}")
+        print(f"悅耳進度條：溢出保護: {'啟用' if not self.exception_on_overflow else '停用'}")
+        print(f"悅耳進度條：線程間隔: {self.thread_sleep_interval*1000:.0f}ms")
+        print(f"悅耳進度條：音頻緩存: 最大 {self.max_cache_size} 條目")
         
         if not PYAUDIO_AVAILABLE:
-            print("警告：內嵌PyAudio不可用，將使用原始音效")
+            print("悅耳進度條：警告：內嵌PyAudio不可用，將使用原始音效")
 
     def get_frequency_cache_key(self, frequency):
         """生成頻率的緩存鍵，將頻率四捨五入到小數點後1位"""
@@ -263,13 +273,13 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
         if cache_key in self.audio_cache:
             self.cache_hits += 1
             if self.debug_mode:
-                print(f"音頻緩存命中: {cache_key}Hz (命中率: {self.cache_hits}/{self.cache_hits + self.cache_misses})")
+                print(f"悅耳進度條：音頻緩存命中: {cache_key}Hz (命中率: {self.cache_hits}/{self.cache_hits + self.cache_misses})")
             return self.audio_cache[cache_key]
         
         # 緩存未命中，生成新音頻
         self.cache_misses += 1
         if self.debug_mode:
-            print(f"音頻緩存未命中，正在生成: {cache_key}Hz")
+            print(f"悅耳進度條：音頻緩存未命中，正在生成: {cache_key}Hz")
         
         # 生成音頻數據
         audio_array = self.generate_clean_sine_wave_32bit(frequency, duration, sample_rate, volume)
@@ -283,17 +293,88 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
             oldest_key = next(iter(self.audio_cache))
             del self.audio_cache[oldest_key]
             if self.debug_mode:
-                print(f"緩存已滿，移除最舊條目: {oldest_key}Hz")
+                print(f"悅耳進度條：緩存已滿，移除最舊條目: {oldest_key}Hz")
         
         # 添加到緩存
         self.audio_cache[cache_key] = audio_array
         
         if self.debug_mode:
             cache_size = len(self.audio_cache)
-            print(f"音頻已緩存: {cache_key}Hz (緩存大小: {cache_size}/{self.max_cache_size})")
+            print(f"悅耳進度條：音頻已緩存: {cache_key}Hz (緩存大小: {cache_size}/{self.max_cache_size})")
         
         return audio_array
 
+    def detect_optimal_audio_params(self):
+        """檢測當前播放設備的最佳音頻參數"""
+        if not PYAUDIO_AVAILABLE:
+            # 後備默認值
+            self.sample_rate = 48000
+            self.optimal_format = paInt16
+            print("悅耳進度條：PyAudio不可用，使用默認音頻參數")
+            return
+        
+        try:
+            temp_pyaudio = PyAudio()
+            
+            # 獲取默認輸出設備信息
+            default_device = temp_pyaudio.get_default_output_device_info()
+            device_index = default_device['index']
+            
+            print(f"悅耳進度條：檢測到播放設備: {default_device['name']}")
+            
+            # 設備支持的採樣率優先級列表（從高到低）
+            preferred_rates = [
+                int(default_device['defaultSampleRate']),  # 設備默認採樣率優先
+                48000, 44100, 96000, 22050, 16000
+            ]
+            
+            # 移除重複並測試支持的採樣率
+            tested_rates = []
+            for rate in preferred_rates:
+                if rate not in tested_rates:
+                    tested_rates.append(rate)
+            
+            # 測試格式優先級：16位 > 24位 > 32位浮點
+            preferred_formats = [paInt16, paInt24, paFloat32]
+            
+            self.sample_rate = 48000  # 默認值
+            self.optimal_format = paInt16  # 默認值
+            
+            # 測試最佳組合
+            for rate in tested_rates:
+                for fmt in preferred_formats:
+                    try:
+                        # 測試是否支持此配置
+                        test_stream = temp_pyaudio.open(
+                            format=fmt,
+                            channels=1,
+                            rate=rate,
+                            output=True,
+                            output_device_index=device_index,
+                            frames_per_buffer=1024
+                        )
+                        test_stream.close()
+                        
+                        # 成功，使用此配置
+                        self.sample_rate = rate
+                        self.optimal_format = fmt
+                        format_name = {paInt16: "16位整數", paInt24: "24位整數", paFloat32: "32位浮點"}
+                        print(f"悅耳進度條：最佳音頻配置: {rate}Hz, {format_name.get(fmt, '未知格式')}")
+                        temp_pyaudio.terminate()
+                        return
+                        
+                    except Exception:
+                        continue
+            
+            temp_pyaudio.terminate()
+            print(f"悅耳進度條：使用檢測配置: {self.sample_rate}Hz, 16位整數")
+            
+        except Exception as e:
+            # 檢測失敗，使用安全默認值
+            self.sample_rate = 48000
+            self.optimal_format = paInt16
+            print(f"悅耳進度條：設備檢測失敗，使用默認配置: {e}")
+            
     def init_audio_stream_32bit(self):
         """初始化PyAudio音頻流 - 32位優化版本"""
         if not PYAUDIO_AVAILABLE or self.stream_initialized:
@@ -302,11 +383,11 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
         try:
             self.pyaudio_instance = PyAudio()
             
-            # 32位優化配置
+            # 使用檢測到的最佳配置
             stream_config = {
-                'format': paInt16,  # 32位系統使用16位整數格式最穩定
+                'format': self.optimal_format,  # 使用檢測到的最佳格式
                 'channels': 1,
-                'rate': self.sample_rate,
+                'rate': self.sample_rate,  # 使用檢測到的最佳採樣率
                 'output': True,
                 'frames_per_buffer': self.frames_per_buffer  # 1024 frames
             }
@@ -316,12 +397,14 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
             
             if self.debug_mode:
                 buffer_ms = self.frames_per_buffer / self.sample_rate * 1000
-                print("守護線程：PyAudio音頻流初始化成功（32位優化）")
-                print(f"緩衝區大小：{self.frames_per_buffer} frames (約{buffer_ms:.1f}ms)")
-                print(f"溢出處理：{'停用（32位兼容）' if not self.exception_on_overflow else '啟用'}")
+                format_name = {paInt16: "16位", paInt24: "24位", paFloat32: "32位浮點"}
+                print("悅耳進度條：守護線程：PyAudio音頻流初始化成功（設備優化）")
+                print(f"悅耳進度條：音頻配置：{self.sample_rate}Hz, {format_name.get(self.optimal_format, '未知')}")
+                print(f"悅耳進度條：緩衝區大小：{self.frames_per_buffer} frames (約{buffer_ms:.1f}ms)")
+                print(f"悅耳進度條：溢出處理：{'停用（32位兼容）' if not self.exception_on_overflow else '啟用'}")
                 
         except Exception as e:
-            print(f"守護線程：PyAudio流初始化失敗: {e}")
+            print(f"悅耳進度條：守護線程：PyAudio流初始化失敗: {e}")
             self.stream_initialized = False
             self.pyaudio_instance = None
             self.audio_stream = None
@@ -337,11 +420,11 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
             daemon=True  # 守護線程，程式退出時自動結束
         )
         self.audio_thread.start()
-        print(f"守護線程已啟動：32位優化模式（間隔{self.thread_sleep_interval*1000:.0f}ms）")
+        print(f"悅耳進度條：守護線程已啟動：32位優化模式（間隔{self.thread_sleep_interval*1000:.0f}ms）")
     
     def audio_daemon_worker_32bit(self):
         """守護線程：循環檢查播放請求屬性 - 32位優化版本"""
-        print("守護線程開始工作：32位架構適配循環 + 音頻緩存")
+        print("悅耳進度條：守護線程開始工作：32位架構適配循環 + 音頻緩存")
         
         while self.thread_running:
             try:
@@ -363,10 +446,10 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
                         self.last_played_id = self.play_id
                         
                         if self.debug_mode:
-                            print(f"守護線程播放完成（32位優化）: ID={self.play_id}")
+                            print(f"悅耳進度條：守護線程播放完成（32位優化）: ID={self.play_id}")
                             
                     except Exception as e:
-                        print(f"守護線程播放錯誤: {e}")
+                        print(f"悅耳進度條：守護線程播放錯誤: {e}")
                         # 即使播放失敗也要更新ID，避免重複嘗試
                         self.last_played_id = self.play_id
                 
@@ -374,10 +457,10 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
                 time.sleep(self.thread_sleep_interval)
                 
             except Exception as e:
-                print(f"守護線程循環錯誤: {e}")
+                print(f"悅耳進度條：守護線程循環錯誤: {e}")
                 time.sleep(0.1)  # 出錯也要延遲，避免瘋狂循環
         
-        print("守護線程已退出")
+        print("悅耳進度條：守護線程已退出")
 
     def execute_audio_play_32bit(self, original_hz):
         """在守護線程中執行音頻播放 - 32位優化版本 + 音頻緩存"""
@@ -400,7 +483,7 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
                 try:
                     # 檢查流是否仍然活躍
                     if hasattr(self.audio_stream, 'is_active') and not self.audio_stream.is_active():
-                        print("警告：音頻流不活躍，嘗試重新初始化")
+                        print("悅耳進度條：警告：音頻流不活躍，嘗試重新初始化")
                         self.cleanup_audio_resources()
                         self.init_audio_stream_32bit()
 
@@ -414,20 +497,20 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
                         if self.debug_mode:
                             progress_percent = progress * 100
                             cache_key = self.get_frequency_cache_key(mapped_freq)
-                            print(f"守護線程執行播放（32位緩存）: {original_hz}Hz → {mapped_freq:.1f}Hz (進度: {progress_percent:.1f}%) [緩存: {cache_key}Hz]")
+                            print(f"悅耳進度條：守護線程執行播放（32位緩存）: {original_hz}Hz → {mapped_freq:.1f}Hz (進度: {progress_percent:.1f}%) [緩存: {cache_key}Hz]")
                             
                 except Exception as stream_error:
-                    print(f"音頻流寫入錯誤: {stream_error}")
+                    print(f"悅耳進度條：音頻流寫入錯誤: {stream_error}")
                     # 嘗試重新初始化音頻流
                     try:
                         self.cleanup_audio_resources()
                         self.init_audio_stream_32bit()
-                        print("音頻流重新初始化完成（32位模式）")
+                        print("悅耳進度條：音頻流重新初始化完成（32位模式）")
                     except Exception as init_error:
-                        print(f"音頻流重新初始化失敗: {init_error}")
+                        print(f"悅耳進度條：音頻流重新初始化失敗: {init_error}")
             
         except Exception as e:
-            print(f"音頻播放執行錯誤: {e}")
+            print(f"悅耳進度條：音頻播放執行錯誤: {e}")
 
     def request_audio_play(self, frequency):
         """請求播放音頻：設置屬性，由守護線程檢查和播放"""
@@ -440,43 +523,42 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
             self.play_id = new_play_id
             
             if self.debug_mode:
-                print(f"播放請求已提交（32位）: {frequency}Hz, ID={new_play_id}")
+                print(f"悅耳進度條：播放請求已提交（32位）: {frequency}Hz, ID={new_play_id}")
                 
         except Exception as e:
-            print(f"提交播放請求錯誤: {e}")
+            print(f"悅耳進度條：提交播放請求錯誤: {e}")
     
     def hook_beep_function(self):
         """攔截tones.beep函數"""
         if not self.original_beep:
             self.original_beep = tones.beep
             tones.beep = self.optimized_beep_32bit
-            print("已攔截tones.beep函數（32位優化 + 音頻緩存版本）")
+            print("悅耳進度條：已攔截tones.beep函數（32位優化 + 音頻緩存版本）")
     
     def unhook_beep_function(self):
         """恢復原始beep函數"""
         if self.original_beep:
             tones.beep = self.original_beep
             self.original_beep = None
-            print("已恢復原始tones.beep函數")
+            print("悅耳進度條：已恢復原始tones.beep函數")
     
     def optimized_beep_32bit(self, hz, length, left=50, right=50):
-        """優化的beep函數 - 32位版本"""
+        """優化的beep函數 - 32位版本 - 修復原始音效播放問題"""
         # 檢查是否為進度條音效
         if self.is_progress_beep(hz, length, left, right):
             if self.debug_mode:
-                print(f"識別為進度條音效（32位處理）: {hz}Hz")
+                print(f"悅耳進度條：識別為進度條音效（32位處理）: {hz}Hz")
             
             if self.enabled and PYAUDIO_AVAILABLE and self.thread_running:
                 # 調用回調函數請求播放（立即返回，不阻塞）
                 self.request_audio_play(hz)
                 return  # 不播放原始音效
             elif self.enabled:
-                print("守護線程：PyAudio不可用，使用原始音效")
-                # 繼續播放原始音效
-            else:
-                return  # 插件停用時完全靜音
+                print("悅耳進度條：守護線程：PyAudio不可用，使用原始音效")
+                # 插件啟用但PyAudio不可用，播放原始音效
+            # 如果插件停用，繼續執行到最後播放原始音效
         
-        # 播放原始音效
+        # 播放原始音效（進度條音效且插件停用時，或者非進度條音效時）
         if self.original_beep:
             self.original_beep(hz, length, left, right)
 
@@ -496,7 +578,7 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
             t = i * sample_rate_inv
             sample = math.sin(two_pi_f * t)
             
-            # 淡入淡出
+            # 淡入淡出（Raised Cosine曲線）
             if i < fade_samples:
                 fade_factor = (1.0 - math.cos(math.pi * i / fade_samples)) / 2.0
                 sample *= fade_factor
@@ -526,21 +608,21 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
         self.audio_cache.clear()
         self.cache_hits = 0
         self.cache_misses = 0
-        print(f"音頻緩存已清理（清理了 {cache_size} 個條目）")
+        print(f"悅耳進度條：音頻緩存已清理（清理了 {cache_size} 個條目）")
     
     def stop_audio_daemon(self):
         """停止守護線程"""
         if self.audio_thread and self.thread_running:
-            print("正在停止守護線程...")
+            print("悅耳進度條：正在停止守護線程...")
             self.thread_running = False
             
             # 等待線程退出（最多1秒）
             self.audio_thread.join(timeout=1.0)
             
             if self.audio_thread.is_alive():
-                print("警告：守護線程未能正常退出")
+                print("悅耳進度條：警告：守護線程未能正常退出")
             else:
-                print("守護線程已正常退出")
+                print("悅耳進度條：守護線程已正常退出")
     
     def cleanup_audio_resources(self):
         """清理音頻資源"""
@@ -555,13 +637,13 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
                 self.pyaudio_instance = None
             
             self.stream_initialized = False
-            print("守護線程：PyAudio資源清理完成（32位模式）")
+            print("悅耳進度條：守護線程：PyAudio資源清理完成（32位模式）")
         except Exception as e:
-            print(f"清理PyAudio資源時發生錯誤: {e}")
+            print(f"悅耳進度條：清理PyAudio資源時發生錯誤: {e}")
     
     def terminate(self):
         """插件清理"""
-        print("正弦波進度條音效插件正在停用（32位優化 + 音頻緩存版本）...")
+        print("悅耳進度條：正在停用（32位優化 + 音頻緩存版本）...")
         
         # 停用播放
         self.enabled = False
@@ -581,78 +663,23 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
         # 清理記錄
         self.beep_log.clear()
         
-        print("正弦波進度條音效插件已完全停用")
+        print("悅耳進度條：已完全停用")
         super().terminate()
     
-    # 快捷鍵：切換插件
-    @script(description="切換32位優化進度條音效開關", gesture="kb:NVDA+shift+p")
-    def script_toggleDaemonProgress(self, gesture):
+    # 快捷鍵：切換插件（唯一保留的快捷鍵）
+    @script(description="切換悅耳進度條開關", gesture="kb:NVDA+shift+p")
+    def script_toggleProgressSound(self, gesture):
         self.enabled = not self.enabled
-        state_text = "啟用" if self.enabled else "停用"
         
+        if self.enabled:
+            ui.message("開啟 悅耳進度條")
+        else:
+            ui.message("關閉 悅耳進度條")
+        
+        # 詳細日誌
+        state_text = "啟用" if self.enabled else "停用"
         if PYAUDIO_AVAILABLE and self.thread_running:
             status = "（32位優化 + 音頻緩存可用）"
         else:
             status = "（降級到原始音效）"
-        
-        ui.message(f"32位優化進度條音效已{state_text}{status}")
-        print(f"用戶切換音效狀態: {state_text}")
-    
-    # 快捷鍵：檢查狀態
-    @script(description="檢查32位優化插件狀態", gesture="kb:NVDA+shift+c")
-    def script_checkDaemonStatus(self, gesture):
-        portaudio_exists = os.path.exists(os.path.join(plugin_dir, "_portaudio.pyd"))
-        
-        # 檢查線程狀態
-        thread_alive = self.audio_thread.is_alive() if self.audio_thread else False
-        
-        # 計算緩存命中率
-        total_requests = self.cache_hits + self.cache_misses
-        hit_rate = (self.cache_hits / total_requests * 100) if total_requests > 0 else 0
-        
-        ui.message("32位優化插件狀態：")
-        ui.message(f"_portaudio.pyd文件: {'存在' if portaudio_exists else '不存在'}")
-        ui.message(f"內嵌PyAudio載入: {'成功' if PYAUDIO_AVAILABLE else '失敗'}")
-        ui.message(f"音頻流狀態: {'已初始化' if self.stream_initialized else '未初始化'}")
-        ui.message(f"守護線程: {'運行中' if thread_alive else '已停止'}")
-        ui.message(f"緩衝區配置: {self.frames_per_buffer} frames")
-        ui.message(f"線程間隔: {self.thread_sleep_interval*1000:.0f}ms")
-        ui.message(f"音量設定: {self.volume:.2f}")
-        ui.message(f"音頻緩存: {len(self.audio_cache)}/{self.max_cache_size} 條目")
-        ui.message(f"緩存命中率: {hit_rate:.1f}% ({self.cache_hits}/{total_requests})")
-        
-        print(f"32位優化插件詳細狀態:")
-        print(f"  PyAudio可用: {PYAUDIO_AVAILABLE}")
-        print(f"  音頻流初始化: {self.stream_initialized}")
-        print(f"  線程運行狀態: {self.thread_running}")
-        print(f"  線程存活狀態: {thread_alive}")
-        print(f"  緩衝區大小: {self.frames_per_buffer} frames")
-        print(f"  溢出保護: {'停用' if not self.exception_on_overflow else '啟用'}")
-        print(f"  線程間隔: {self.thread_sleep_interval*1000:.0f}ms")
-        print(f"  音量調整: {self.volume:.2f}")
-        print(f"  音頻緩存大小: {len(self.audio_cache)}/{self.max_cache_size}")
-        print(f"  緩存命中: {self.cache_hits}, 未命中: {self.cache_misses}")
-        print(f"  緩存命中率: {hit_rate:.1f}%")
-        print(f"  當前播放請求: freq={self.play_frequency}, id={self.play_id}")
-        print(f"  最後播放ID: {self.last_played_id}")
-        print(f"  播放架構: 32位優化守護線程 + 音頻緩存")
-    
-    # 快捷鍵：清理音頻緩存
-    @script(description="清理音頻緩存", gesture="kb:NVDA+shift+x")
-    def script_clearAudioCache(self, gesture):
-        cache_size = len(self.audio_cache)
-        hit_rate = (self.cache_hits / (self.cache_hits + self.cache_misses) * 100) if (self.cache_hits + self.cache_misses) > 0 else 0
-        
-        self.clear_audio_cache()
-        
-        ui.message(f"音頻緩存已清理")
-        ui.message(f"清理前狀態: {cache_size} 條目，命中率 {hit_rate:.1f}%")
-        print(f"用戶手動清理音頻緩存：清理了 {cache_size} 個條目")
-    
-    # 快捷鍵：切換調試模式
-    @script(description="切換調試模式", gesture="kb:NVDA+shift+d")
-    def script_toggleDebug(self, gesture):
-        self.debug_mode = not self.debug_mode
-        state_text = "開啟" if self.debug_mode else "關閉"
-        ui.message(f"32位優化調試模式已{state_text}")
-        print(f"調試模式: {state_text}")
+        print(f"悅耳進度條：用戶切換音效狀態: {state_text}{status}")
