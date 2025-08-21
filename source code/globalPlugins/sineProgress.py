@@ -642,7 +642,7 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
         
         print("悅耳進度條：守護線程已退出")
 
-    def execute_audio_play_32bit(self, original_hz):
+    def old_execute_audio_play_32bit(self, original_hz):
         """在守護線程中執行音頻播放 - 32位優化版本 + 音頻緩存"""
         try:
             # 頻率映射：使用用戶配置的頻率範圍
@@ -693,6 +693,65 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
         except Exception as e:
             print(f"悅耳進度條：音頻播放執行錯誤: {e}")
 
+    def execute_audio_play_32bit(self, original_hz):
+        """在守護線程中執行音頻播放 - 32位優化版本 + 音頻緩存 + 修正頻率映射"""
+        try:
+            # 修正頻率映射邏輯：將原始進度條頻率範圍重新映射到用戶設定範圍
+            
+            # 原始進度條的頻率範圍（根據is_progress_beep函數定義）
+            ORIGINAL_MIN_FREQ = 110   # 原始進度條最低頻率
+            ORIGINAL_MAX_FREQ = 1800  # 原始進度條最高頻率
+            
+            # 計算原始頻率在原始範圍中的進度比例
+            original_progress = (original_hz - ORIGINAL_MIN_FREQ) / (ORIGINAL_MAX_FREQ - ORIGINAL_MIN_FREQ)
+            # 確保進度在0-1範圍內
+            original_progress = max(0.0, min(1.0, original_progress))
+            
+            # 將進度比例映射到用戶設定的頻率範圍
+            mapped_freq = self.mapped_min_freq + original_progress * (self.mapped_max_freq - self.mapped_min_freq)
+            
+            # 使用音頻緩存系統獲取或生成音頻數據
+            audio_array = self.get_cached_audio_or_generate(
+                frequency=mapped_freq,
+                duration=self.audio_duration,
+                sample_rate=self.sample_rate,
+                volume=self.volume
+            )
+            
+            # 播放音頻
+            if self.enabled and self.stream_initialized and self.audio_stream:
+                try:
+                    # 檢查流是否仍然活躍
+                    if hasattr(self.audio_stream, 'is_active') and not self.audio_stream.is_active():
+                        print("悅耳進度條：警告：音頻流不活躍，嘗試重新初始化")
+                        self.cleanup_audio_resources()
+                        self.init_audio_stream_32bit()
+
+                    if self.audio_stream:
+                        # 使用32位優化的溢出處理策略
+                        self.audio_stream.write(
+                            audio_array.tobytes(),
+                            exception_on_underflow=self.exception_on_overflow
+                        )
+                        
+                        if self.debug_mode:
+                            progress_percent = original_progress * 100
+                            cache_key = self.get_frequency_cache_key(mapped_freq)
+                            print(f"悅耳進度條：頻率映射（修正版）: {original_hz}Hz → {mapped_freq:.1f}Hz (原始進度: {progress_percent:.1f}%) [用戶範圍: {self.mapped_min_freq}-{self.mapped_max_freq}Hz] [緩存: {cache_key}]")
+                            
+                except Exception as stream_error:
+                    print(f"悅耳進度條：音頻流寫入錯誤: {stream_error}")
+                    # 嘗試重新初始化音頻流
+                    try:
+                        self.cleanup_audio_resources()
+                        self.init_audio_stream_32bit()
+                        print("悅耳進度條：音頻流重新初始化完成（32位模式）")
+                    except Exception as init_error:
+                        print(f"悅耳進度條：音頻流重新初始化失敗: {init_error}")
+            
+        except Exception as e:
+            print(f"悅耳進度條：音頻播放執行錯誤: {e}")
+            
     def request_audio_play(self, frequency):
         """請求播放音頻：設置屬性，由守護線程檢查和播放"""
         try:
