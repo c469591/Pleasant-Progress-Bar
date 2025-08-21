@@ -337,6 +337,9 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
         """應用配置參數到插件"""
         if CONFIG_AVAILABLE:
             try:
+                            # 獲取波形類型
+                self.waveform_type = sine_progress_config.get_waveform_type()
+
                 # 獲取淡入淡出算法
                 self.fade_algorithm = sine_progress_config.get_fade_algorithm()
                 
@@ -364,8 +367,9 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 
     def apply_default_parameters(self):
         """應用預設參數"""
+        self.waveform_type = 'sine'
         self.fade_algorithm = 'cosine'
-        self.volume = 0.5
+        self.volume = 0.4
         self.min_frequency = 110
         self.max_frequency = 1760
         self.mapped_min_freq = 110
@@ -419,32 +423,47 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
         except Exception as e:
             print(f"悅耳進度條：重新載入配置時發生錯誤: {e}")
 
-    def get_frequency_cache_key(self, frequency):
+    def get_frequency_cache_key(self, frequency, volume=None, waveform_type=None):
         """生成頻率的緩存鍵，將頻率四捨五入到小數點後1位"""
-        return round(frequency, 1)
+        # 使用當前配置值作為默認值
+        if volume is None:
+            volume = self.volume
+        if waveform_type is None:
+            waveform_type = self.waveform_type
+        
+        # 創建包含所有參數的緩存鍵
+        freq_key = round(frequency, 1)
+        volume_key = round(volume, 2)  # 音量精確到小數點後2位
+        
+        return f"{freq_key}Hz_{volume_key}vol_{waveform_type}"
+
 
     def get_cached_audio_or_generate(self, frequency, duration, sample_rate, volume):
         """獲取緩存的音頻或生成新的音頻"""
-        cache_key = self.get_frequency_cache_key(frequency)
+        # 生成包含音量和波形類型的緩存鍵
+        cache_key = self.get_frequency_cache_key(frequency, volume, self.waveform_type)
         
         # 檢查緩存
         if cache_key in self.audio_cache:
             self.cache_hits += 1
             if self.debug_mode:
-                print(f"悅耳進度條：音頻緩存命中: {cache_key}Hz (命中率: {self.cache_hits}/{self.cache_hits + self.cache_misses})")
+                print(f"悅耳進度條：音頻緩存命中: {cache_key} (命中率: {self.cache_hits}/{self.cache_hits + self.cache_misses})")
             return self.audio_cache[cache_key]
         
         # 緩存未命中，生成新音頻
         self.cache_misses += 1
         if self.debug_mode:
-            print(f"悅耳進度條：音頻緩存未命中，正在生成: {cache_key}Hz")
+            print(f"悅耳進度條：音頻緩存未命中，正在生成: {cache_key}")
         
-        # 根據配置選擇淡入淡出算法生成音頻數據
-        if self.fade_algorithm == 'gaussian':
-            audio_array = self.generate_gaussian_sine_wave_32bit(frequency, duration, sample_rate, volume)
-        else:
-            audio_array = self.generate_clean_sine_wave_32bit(frequency, duration, sample_rate, volume)
-        
+        # 根據配置選擇波形類型生成音頻數據
+        audio_array = self.generate_waveform_32bit(
+            frequency=frequency,
+            duration=duration,
+            sample_rate=sample_rate,
+            volume=volume,
+            waveform_type=self.waveform_type
+        )        
+
         # 32位系統音頻緩衝區對齊優化
         audio_array = align_audio_buffer_32bit(audio_array)
         
@@ -454,14 +473,14 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
             oldest_key = next(iter(self.audio_cache))
             del self.audio_cache[oldest_key]
             if self.debug_mode:
-                print(f"悅耳進度條：緩存已滿，移除最舊條目: {oldest_key}Hz")
+                print(f"悅耳進度條：緩存已滿，移除最舊條目: {oldest_key}")
         
         # 添加到緩存
         self.audio_cache[cache_key] = audio_array
         
         if self.debug_mode:
             cache_size = len(self.audio_cache)
-            print(f"悅耳進度條：音頻已緩存: {cache_key}Hz (緩存大小: {cache_size}/{self.max_cache_size})")
+            print(f"悅耳進度條：音頻已緩存: {cache_key} (緩存大小: {cache_size}/{self.max_cache_size})")
         
         return audio_array
 
@@ -636,7 +655,8 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
                 frequency=mapped_freq,
                 duration=self.audio_duration,
                 sample_rate=self.sample_rate,
-                volume=0.2  # 進一步降低音量避免32位系統報音
+                volume=self.volume
+                #volume=0.2  # 進一步降低音量避免32位系統報音
             )
             
             # 播放音頻
@@ -722,7 +742,8 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
         # 播放原始音效（進度條音效且插件停用時，或者非進度條音效時）
         if self.original_beep:
             self.original_beep(hz, length, left, right)
-    def generate_clean_sine_wave_32bit(self, frequency, duration=0.08, sample_rate=44100, volume=0.6):
+
+    def old_generate_clean_sine_wave_32bit(self, frequency, duration=0.08, sample_rate=44100, volume=0.6):
         """純Python生成乾淨的正弦波音效 - 32位優化版本（余弦淡入淡出）"""
         samples = int(sample_rate * duration)
         audio_array = array.array('h')
@@ -753,7 +774,8 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
             audio_array.append(audio_sample)
         
         return audio_array
-    def generate_gaussian_sine_wave_32bit(self, frequency, duration=0.08, sample_rate=44100, volume=0.6):
+    
+    def old_generate_gaussian_sine_wave_32bit(self, frequency, duration=0.08, sample_rate=44100, volume=0.6):
         """純Python生成高斯淡入淡出的正弦波音效 - 32位優化版本"""
         samples = int(sample_rate * duration)
         audio_array = array.array('h')
@@ -782,7 +804,184 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
             audio_array.append(audio_sample)
         
         return audio_array    
-    
+
+
+    def generate_waveform_32bit(self, frequency, duration=0.08, sample_rate=44100, volume=0.6, waveform_type='sine'):
+        """通用波形生成器 - 32位優化版本"""
+        
+        # 根據波形類型調用對應的生成函數
+        if waveform_type == 'sine':
+            return self.generate_sine_wave(frequency, duration, sample_rate, volume)
+        elif waveform_type == 'square':
+            return self.generate_square_wave(frequency, duration, sample_rate, volume)
+        elif waveform_type == 'triangle':
+            return self.generate_triangle_wave(frequency, duration, sample_rate, volume)
+        elif waveform_type == 'sawtooth':
+            return self.generate_sawtooth_wave(frequency, duration, sample_rate, volume)
+        elif waveform_type == 'pulse':
+            return self.generate_pulse_wave(frequency, duration, sample_rate, volume)
+        elif waveform_type == 'white_noise':
+            return self.generate_white_noise(frequency, duration, sample_rate, volume)
+        else:
+            # 默認使用正弦波
+            return self.generate_sine_wave(frequency, duration, sample_rate, volume)
+
+    def generate_sine_wave(self, frequency, duration, sample_rate, volume):
+        """正弦波生成器"""
+        samples = int(sample_rate * duration)
+        audio_array = array.array('h')
+        
+        two_pi_f = 2.0 * math.pi * frequency
+        sample_rate_inv = 1.0 / sample_rate
+        max_amplitude = 30000
+        
+        for i in range(samples):
+            t = i * sample_rate_inv
+            sample = math.sin(two_pi_f * t)
+            sample = self.apply_fade_effect(sample, i, samples)
+            
+            audio_sample = int(sample * max_amplitude * volume)
+            audio_sample = max(-32768, min(32767, audio_sample))
+            audio_array.append(audio_sample)
+        
+        return audio_array
+
+    def generate_square_wave(self, frequency, duration, sample_rate, volume):
+        """方波生成器"""
+        samples = int(sample_rate * duration)
+        audio_array = array.array('h')
+        
+        two_pi_f = 2.0 * math.pi * frequency
+        sample_rate_inv = 1.0 / sample_rate
+        max_amplitude = 30000
+        
+        for i in range(samples):
+            t = i * sample_rate_inv
+            # 方波：基於正弦波的符號函數
+            sine_val = math.sin(two_pi_f * t)
+            sample = 1.0 if sine_val >= 0 else -1.0
+            sample = self.apply_fade_effect(sample, i, samples)
+            
+            audio_sample = int(sample * max_amplitude * volume)
+            audio_sample = max(-32768, min(32767, audio_sample))
+            audio_array.append(audio_sample)
+        
+        return audio_array
+
+    def generate_triangle_wave(self, frequency, duration, sample_rate, volume):
+        """三角波生成器"""
+        samples = int(sample_rate * duration)
+        audio_array = array.array('h')
+        
+        period_samples = int(sample_rate / frequency)
+        max_amplitude = 30000
+        
+        for i in range(samples):
+            # 三角波：線性上升下降
+            position_in_period = i % period_samples
+            half_period = period_samples / 2.0
+            
+            if position_in_period <= half_period:
+                # 上升階段：從-1到+1
+                sample = (position_in_period / half_period) * 2.0 - 1.0
+            else:
+                # 下降階段：從+1到-1
+                sample = 1.0 - ((position_in_period - half_period) / half_period) * 2.0
+            
+            sample = self.apply_fade_effect(sample, i, samples)
+            
+            audio_sample = int(sample * max_amplitude * volume)
+            audio_sample = max(-32768, min(32767, audio_sample))
+            audio_array.append(audio_sample)
+        
+        return audio_array
+
+    def generate_sawtooth_wave(self, frequency, duration, sample_rate, volume):
+        """鋸齒波生成器"""
+        samples = int(sample_rate * duration)
+        audio_array = array.array('h')
+        
+        period_samples = int(sample_rate / frequency)
+        max_amplitude = 30000
+        
+        for i in range(samples):
+            # 鋸齒波：線性上升然後瞬間下降
+            position_in_period = i % period_samples
+            sample = (position_in_period / period_samples) * 2.0 - 1.0
+            sample = self.apply_fade_effect(sample, i, samples)
+            
+            audio_sample = int(sample * max_amplitude * volume)
+            audio_sample = max(-32768, min(32767, audio_sample))
+            audio_array.append(audio_sample)
+        
+        return audio_array
+
+    def generate_pulse_wave(self, frequency, duration, sample_rate, volume, duty_cycle=0.25):
+        """脈衝波生成器（可調佔空比的方波）"""
+        samples = int(sample_rate * duration)
+        audio_array = array.array('h')
+        
+        period_samples = int(sample_rate / frequency)
+        max_amplitude = 30000
+        
+        for i in range(samples):
+            position_in_period = i % period_samples
+            # 脈衝波：佔空比控制高電平時間
+            sample = 1.0 if (position_in_period / period_samples) < duty_cycle else -1.0
+            sample = self.apply_fade_effect(sample, i, samples)
+            
+            audio_sample = int(sample * max_amplitude * volume)
+            audio_sample = max(-32768, min(32767, audio_sample))
+            audio_array.append(audio_sample)
+        
+        return audio_array
+
+    def generate_white_noise(self, frequency, duration, sample_rate, volume):
+        """白噪音生成器（頻率參數用於調制強度）"""
+        import random
+        samples = int(sample_rate * duration)
+        audio_array = array.array('h')
+        
+        max_amplitude = 30000
+        # 使用頻率來調制噪音的強度變化
+        modulation_factor = frequency / 1000.0  # 將頻率轉換為調制因子
+        
+        for i in range(samples):
+            # 生成隨機噪音
+            noise = random.uniform(-1.0, 1.0)
+            # 根據頻率進行輕微調制
+            modulation = 1.0 + 0.3 * math.sin(2.0 * math.pi * modulation_factor * i / sample_rate)
+            sample = noise * modulation
+            sample = self.apply_fade_effect(sample, i, samples)
+            
+            audio_sample = int(sample * max_amplitude * volume)
+            audio_sample = max(-32768, min(32767, audio_sample))
+            audio_array.append(audio_sample)
+        
+        return audio_array
+
+    def apply_fade_effect(self, sample, current_index, total_samples):
+        """應用淡入淡出效果"""
+        fade_samples = int(total_samples * self.fade_ratio)
+        
+        if self.fade_algorithm == 'gaussian':
+            # 高斯淡入淡出
+            sigma = total_samples * 0.25
+            center = total_samples / 2.0
+            gaussian_factor = math.exp(-0.5 * ((current_index - center) / sigma) ** 2)
+            return sample * gaussian_factor
+        else:
+            # 余弦淡入淡出
+            if current_index < fade_samples:
+                fade_factor = (1.0 - math.cos(math.pi * current_index / fade_samples)) / 2.0
+                return sample * fade_factor
+            elif current_index >= total_samples - fade_samples:
+                fade_index = total_samples - current_index - 1
+                fade_factor = (1.0 - math.cos(math.pi * fade_index / fade_samples)) / 2.0
+                return sample * fade_factor
+            else:
+                return sample
+
     def is_progress_beep(self, hz, length, left, right):
         """檢查是否為進度條音效"""
         return (
