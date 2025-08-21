@@ -2,6 +2,14 @@
 
 讓NVDA的進度條音效變得更加悅耳動聽，支援多種波形和自定義配置。
 
+## 效果試聽
+
+傳統進度條音效：單調的嗶嗶聲→
+[點我下載原始進度條錄音.wav](https://github.com/c469591/Pleasant-Progress-Bar/raw/main/listen/Original_progress_bar.wav)
+悅耳進度條，使用鄭嫌撥和余弦淡入淡出效果→
+[點我下載悅耳進度條錄音.wav](https://github.com/c469591/Pleasant-Progress-Bar/raw/main/listen/Pleasant_progress_bar.wav)
+
+
 ## 下載和GitHub倉庫
 
 * 你可以
@@ -45,12 +53,6 @@
    * 終點頻率（高頻）：1200Hz到1750Hz範圍
 
 
-### 效果範例
-
-傳統進度條音效：單調的嗶嗶聲→
-[點我下載原始進度條.wav](https://github.com/c469591/Pleasant-Progress-Bar/raw/main/listen/Original_progress_bar.wav)
-悅耳進度條，使用鄭嫌撥和余弦淡入淡出效果→
-[點我下載悅耳進度條.wav](https://github.com/c469591/Pleasant-Progress-Bar/raw/main/listen/Pleasant_progress_bar.wav)
 
 ## 🛠️ 故障排除
 
