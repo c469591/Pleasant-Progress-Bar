@@ -2,14 +2,17 @@
 
 讓NVDA的進度條音效變得更加悅耳動聽，支援多種波形和自定義配置。
 
-## 下載
+## 下載和GitHub倉庫
 
-* 你可以[點擊這裡下載最新版本](#)的NVDA插件。
-* 你還可以前往我的github倉庫頁面[點我前往悅耳進度條的github倉庫頁面](#)
+* 你可以
+[點擊這裡下載最新版本](https://github.com/c469591/Pleasant-Progress-Bar/raw/main/pleasant_progress_bar_V0.1.nvda-addon)
+的NVDA插件。
+* 你還可以前往我的github倉庫頁面
+[點我前往悅耳進度條的github倉庫頁面](https://github.com/c469591/Pleasant-Progress-Bar)
 
 ## 相容性
 
-僅在nvda2025.2上進行測試。
+理論上支援2019.3之後的所有版本，但僅在nvda2025.2上進行測試。
 
 ## 🚀 功能特色
 
@@ -24,10 +27,9 @@
 
 ## 🔧 使用方法
 
-## 基本使用
 
 1. 安裝插件後重啟NVDA
-1. 按 `NVDA+Shift+P` 開啟功能（預設為開啟狀態）
+1. 按 `NVDA+Shift+P` 切換開啟或停用插件功能。（預設為開啟狀態）
 1. 在任何有進度條的應用程式中體驗悅耳的音效
 1. 透過NVDA設定面板自定義音效參數
 
@@ -38,15 +40,17 @@
 1. 根據個人喜好調整以下設定：
    * 波形類型：選擇喜歡的波形（正弦波最柔和，方波最清脆）
    * 淡入淡出算法：余弦（經典）或高斯（更平滑）
-   * 音量調整：0.1到1.0之間調節
+   * 音量調整：0.1最小，到1.0最大
    * 起點頻率（低頻）：110Hz到300Hz範圍
    * 終點頻率（高頻）：1200Hz到1750Hz範圍
 
 
 ### 效果範例
 
-傳統進度條音效：單調的嗶嗶聲  
-悅耳進度條音效：從低頻到高頻的平滑過渡，如音樂般動聽
+傳統進度條音效：單調的嗶嗶聲→
+[點我下載原始進度條.wav](https://github.com/c469591/Pleasant-Progress-Bar/raw/main/listen/Original_progress_bar.wav)
+悅耳進度條，使用鄭嫌撥和余弦淡入淡出效果→
+[點我下載悅耳進度條.wav](https://github.com/c469591/Pleasant-Progress-Bar/raw/main/listen/Pleasant_progress_bar.wav)
 
 ## 🛠️ 故障排除
 
@@ -99,12 +103,15 @@ A: 請到設定面板調整音量，或檢查系統音頻設定。
 
 如果你遇到問題或有建議，歡迎聯繫：
 
-* 電子郵件：[你的郵件地址]
-* GitHub Issues：[你的GitHub倉庫]
+* 電子郵件：
+c469591@mail.batol.net
+* 或前往GitHub倉庫發問提:
+[點我前往悅耳進度條的GitHub倉庫](https://github.com/c469591/Pleasant-Progress-Bar)
+
 
 ## 📝 授權條款
 
-本插件採用 [授權條款] 發布，詳細條款請參閱 LICENSE 檔案。
+本插件採用 [GPL v3] 發布，詳細條款請參閱 LICENSE 檔案。
 
 ---
 
