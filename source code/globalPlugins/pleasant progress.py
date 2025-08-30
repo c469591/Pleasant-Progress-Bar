@@ -2,7 +2,7 @@
 # 悅耳進度條 - 32位優化版本
 # 針對NVDA 32位環境優化，解決報音和雙音調問題，並使用音頻緩存提升性能
 # 支援用戶自定義配置：淡入淡出算法、音量、頻率範圍
-
+import wx
 import globalPluginHandler
 import threading
 import time
@@ -15,20 +15,62 @@ import sys
 import os
 import gui
 from gui.settingsDialogs import NVDASettingsDialog
+import gettext
+import languageHandler
+
+# =============================================================================
+# 國際化初始化
+# =============================================================================
+def initTranslation():
+    """初始化插件的國際化翻譯"""
+    try:
+        # 獲取插件目錄和locale資料夾路徑
+        addon_dir = os.path.dirname(__file__)  # 獲取當前文件所在目錄（globalPlugins）
+        parent_dir = os.path.dirname(addon_dir)  # 獲取父目錄
+        locale_dir = os.path.join(parent_dir, "locale")  # 父目錄下的locale資料夾
+
+        
+        # 獲取當前NVDA使用的語言
+        lang = languageHandler.getLanguage()
+        
+        # 創建翻譯對象
+        translation = gettext.translation(
+            "nvda",                    # domain name
+            localedir=locale_dir,      # locale資料夾路徑
+            languages=[lang],          # 語言列表
+            fallback=True              # 找不到翻譯時使用原文
+        )
+        
+        # 返回gettext函數
+        return translation.gettext
+        
+    except Exception:
+        # 如果初始化失敗，返回簡單的fallback函數
+        return lambda x: x
+
+# 初始化並獲取翻譯函數
+addonGettext = initTranslation()
 
 # 導入配置管理和設定UI模塊
 try:
-    from ._sineProgressConfig import sine_progress_config
-    from ._sineProgressSettings import SineProgressSettingsPanel
+    from ._pleasant_progressconfig import sine_progress_config
+    from ._Pleasant_progress_settings import SineProgressSettingsPanel
     CONFIG_AVAILABLE = True
     print("悅耳進度條：配置模塊載入成功")
 except ImportError as e:
     CONFIG_AVAILABLE = False
     print(f"悅耳進度條：配置模塊載入失敗: {e}")
 
-# =============================================================================
+
+# 導入設備監聽模塊
+try:
+    from ._device_monitor import NVDADeviceMonitor
+    DEVICE_MONITOR_AVAILABLE = True
+except ImportError:
+    DEVICE_MONITOR_AVAILABLE = False
+
 # 32位音頻緩衝區對齊優化函數
-# =============================================================================
+
 
 def align_audio_buffer_32bit(audio_array):
     """確保音頻緩衝區在32位系統中正確對齊"""
@@ -117,12 +159,40 @@ if PYAUDIO_AVAILABLE:
                 'maxOutputChannels': 2
             }
 
-    def get_device_info_by_index(device_index):
+    def old_get_device_info_by_index(device_index):
         """根據索引獲取設備信息"""
         try:
             return pa.get_device_info_by_index(device_index)
         except AttributeError:
             # 如果_portaudio模塊沒有此函數，返回模擬的設備信息
+            return {
+                'index': device_index,
+                'name': f'Audio Device {device_index}',
+                'defaultSampleRate': 44100.0,
+                'maxOutputChannels': 2
+            }
+
+    def get_device_info_by_index(self, device_index):
+        """根據索引獲取設備信息 - 修正版本"""
+        try:
+            # 使用正確的函數名稱
+            device_info = pa.get_device_info(device_index)
+            
+            # 提取設備信息
+            name = device_info.name
+            # 處理 bytes 格式的名稱
+            if isinstance(name, bytes):
+                name = name.decode('utf-8', errors='ignore')
+            
+            return {
+                'index': device_index,
+                'name': name,
+                'defaultSampleRate': float(device_info.defaultSampleRate),
+                'maxOutputChannels': int(device_info.maxOutputChannels)
+            }
+            
+        except Exception as e:
+            # 降級到通用名稱
             return {
                 'index': device_index,
                 'name': f'Audio Device {device_index}',
@@ -253,17 +323,28 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
         
         # 從配置載入音效參數（移除硬編碼值）
         self.apply_config_parameters()
-        
-        # 32位優化的音頻生成參數
-        self.audio_duration = 0.08  # 80ms播放時長
-        
+
+        # 初始化設備監聽器
+        if DEVICE_MONITOR_AVAILABLE:
+            self.device_monitor = NVDADeviceMonitor(
+                on_device_change_callback=self.on_nvda_device_change,
+                debug_mode=self.debug_mode,
+                pyaudio_instance_getter=self.create_temp_pyaudio_instance  # 提供PyAudio實例獲取函數
+            )
+            self.device_monitor.start_monitoring()
+        else:
+            self.device_monitor = None
+            print("悅耳進度條：設備監聽模塊不可用，將使用固定設備")
+
+
         # 檢測設備最佳音頻參數
         self.detect_optimal_audio_params()
         
         # 32位優化配置
-        self.frames_per_buffer = 128  # 從4096降低到1024
+        self.frames_per_buffer = 128  #緩衝大小
         self.exception_on_overflow = False  # 防止32位系統溢出崩潰
-        self.thread_sleep_interval = 0.12  # 修正線程間隔：120ms
+        # 動態計算線程間隔：波形長度 + 40ms
+        self.thread_sleep_interval = self.audio_duration + 0.04
         
         # 音頻緩存系統
         self.audio_cache = {}  # 頻率 -> 音頻數據的緩存字典
@@ -299,6 +380,9 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
         # 註冊設定面板到NVDA設定對話框
         self.register_settings_panel()
         
+        # 初始化完成提示
+        print("悅耳進度條：已啟動")
+        
         # 顯示插件狀態
         pyaudio_status = "可用" if PYAUDIO_AVAILABLE else "不可用"
         config_status = "可用" if CONFIG_AVAILABLE else "不可用"
@@ -333,6 +417,22 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
         else:
             print("悅耳進度條：配置模塊不可用，使用預設參數")
 
+
+    # 新增方法：創建臨時PyAudio實例
+    def create_temp_pyaudio_instance(self):
+        """創建臨時PyAudio實例供device_monitor使用"""
+        try:
+            if PYAUDIO_AVAILABLE:
+                return PyAudio()
+            return None
+        except Exception as e:
+            print(f"悅耳進度條：創建臨時PyAudio實例失敗: {e}")
+            return None
+
+    def calculate_thread_interval(self):
+        # 波形長度 + 40ms的緩衝時間
+        self.thread_sleep_interval = self.audio_duration + 0.04
+
     def apply_config_parameters(self):
         """應用配置參數到插件"""
         if CONFIG_AVAILABLE:
@@ -350,6 +450,9 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
                 self.min_frequency, self.max_frequency = sine_progress_config.get_frequency_range()
                 self.mapped_min_freq = self.min_frequency
                 self.mapped_max_freq = self.max_frequency
+
+                #波形長度
+                self.audio_duration = sine_progress_config.get_audio_duration()
                 
                 # 根據算法設定淡入淡出比例
                 if self.fade_algorithm == 'gaussian':
@@ -357,8 +460,12 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
                 else:
                     self.fade_ratio = 0.45  # 余弦算法使用原來的比例
                 
-                print(f"悅耳進度條：配置參數已應用")
                 
+                print(f"悅耳進度條：配置參數已應用")
+
+                            # 重新計算線程間隔
+                self.calculate_thread_interval()
+
             except Exception as e:
                 print(f"悅耳進度條：應用配置參數時發生錯誤: {e}")
                 self.apply_default_parameters()
@@ -375,6 +482,7 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
         self.mapped_min_freq = 110
         self.mapped_max_freq = 1760
         self.fade_ratio = 0.45
+        self.audio_duration = 0.08  # 預設80ms
         print("悅耳進度條：已應用預設參數")
 
     def register_settings_panel(self):
@@ -393,8 +501,7 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 
     def reload_configuration(self):
         """重新載入配置並重新初始化（由設定面板調用）"""
-        print("悅耳進度條：開始重新載入配置...")
-        
+    
         try:
             # 停止當前的音頻處理
             self.stop_audio_daemon()
@@ -414,6 +521,9 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
             if PYAUDIO_AVAILABLE:
                 self.init_audio_stream_32bit()
                 self.start_audio_daemon()
+
+        # 重新計算線程間隔
+            self.calculate_thread_interval()
             
             print("悅耳進度條：配置重新載入完成")
             print(f"  - 淡入淡出算法: {self.fade_algorithm}")
@@ -422,6 +532,57 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
             
         except Exception as e:
             print(f"悅耳進度條：重新載入配置時發生錯誤: {e}")
+
+
+    def on_nvda_device_change(self, old_device, new_device):
+        """設備變更回調函數 - 使用device_monitor獲取友好名稱"""
+        try:
+            # 使用device_monitor獲取友好名稱
+            if self.device_monitor:
+                friendly_name = self.device_monitor.get_device_friendly_name(new_device)
+            else:
+                friendly_name = new_device if new_device and new_device != "default" else "預設設備"
+            
+            wx.CallAfter(ui.message, f"悅耳進度條已切換到：{friendly_name}")
+            
+            # 使用現有的音頻重新初始化邏輯
+            self.reinitialize_audio_system()
+            
+        except Exception as e:
+            print(f"悅耳進度條：處理設備變更時發生錯誤: {e}")
+
+    # 修改reinitialize_audio_system方法
+    def reinitialize_audio_system(self):
+        """重新初始化音頻系統 - 使用device_monitor重新檢測設備"""
+        try:
+            print("悅耳進度條：設備變更，正在重新初始化音頻系統...")
+            
+            # 停止守護線程
+            self.stop_audio_daemon()
+            
+            # 清理現有音頻資源
+            self.cleanup_audio_resources()
+            
+            # 清理音頻緩存（設備變更時清理緩存是好習慣）
+            self.clear_audio_cache()
+            
+            # 使用device_monitor重新檢測設備參數
+            if self.device_monitor:
+                self.device_monitor.refresh_device_list()  # 刷新設備列表
+            
+            # 重新檢測設備參數
+            self.detect_optimal_audio_params()
+            
+            # 重新初始化PyAudio音頻流
+            if PYAUDIO_AVAILABLE:
+                self.init_audio_stream_32bit()
+                self.start_audio_daemon()
+            
+            print("悅耳進度條：音頻系統重新初始化完成")
+            
+        except Exception as e:
+            print(f"悅耳進度條：重新初始化音頻系統時發生錯誤: {e}")
+
 
     def get_frequency_cache_key(self, frequency, volume=None, waveform_type=None):
         """生成頻率的緩存鍵，將頻率四捨五入到小數點後1位"""
@@ -484,7 +645,7 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
         
         return audio_array
 
-    def detect_optimal_audio_params(self):
+    def old_detect_optimal_audio_params(self):
         """檢測當前播放設備的最佳音頻參數"""
         if not PYAUDIO_AVAILABLE:
             # 後備默認值
@@ -554,8 +715,46 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
             self.sample_rate = 48000
             self.optimal_format = paInt16
             print(f"悅耳進度條：設備檢測失敗，使用默認配置: {e}")
-            
-    def init_audio_stream_32bit(self):
+
+    def detect_optimal_audio_params(self):
+        """檢測當前播放設備的最佳音頻參數 - 使用device_monitor"""
+        if not PYAUDIO_AVAILABLE:
+            # 後備默認值
+            self.sample_rate = 48000
+            self.optimal_format = paInt16
+            self.output_device_index = None
+            print("悅耳進度條：PyAudio不可用，使用默認音頻參數")
+            return
+        
+        if self.device_monitor:
+            try:
+                # 使用device_monitor獲取最佳參數
+                params = self.device_monitor.get_optimal_params_for_current_device()
+                
+                self.sample_rate = params.get('sample_rate', 48000)
+                self.optimal_format = params.get('format', paInt16)
+                self.output_device_index = params.get('device_index', None)
+                
+                device_name = params.get('device_name', 'Unknown Device')
+                format_name = {paInt16: "16位整數", paInt24: "24位整數", paFloat32: "32位浮點"}
+                
+                print(f"悅耳進度條：使用device_monitor檢測設備: {device_name}")
+                print(f"悅耳進度條：最佳音頻配置: {self.sample_rate}Hz, {format_name.get(self.optimal_format, '未知格式')}")
+                print(f"悅耳進度條：設備索引: {self.output_device_index}")
+                
+            except Exception as e:
+                print(f"悅耳進度條：使用device_monitor檢測失敗，降級到默認配置: {e}")
+                self.sample_rate = 48000
+                self.optimal_format = paInt16
+                self.output_device_index = None
+        else:
+            # 原有的檢測邏輯作為後備方案
+            self.sample_rate = 48000
+            self.optimal_format = paInt16
+            self.output_device_index = None
+            print("悅耳進度條：device_monitor不可用，使用默認配置")
+
+    def old_init_audio_stream_32bit(self):
         """初始化PyAudio音頻流 - 32位優化版本"""
         if not PYAUDIO_AVAILABLE or self.stream_initialized:
             return
@@ -571,6 +770,91 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
                 'output': True,
                 'frames_per_buffer': self.frames_per_buffer  # 1024 frames
             }
+            
+            self.audio_stream = self.pyaudio_instance.open(**stream_config)
+            self.stream_initialized = True
+            
+            if self.debug_mode:
+                buffer_ms = self.frames_per_buffer / self.sample_rate * 1000
+                format_name = {paInt16: "16位", paInt24: "24位", paFloat32: "32位浮點"}
+                print("悅耳進度條：守護線程：PyAudio音頻流初始化成功（設備優化）")
+                print(f"悅耳進度條：音頻配置：{self.sample_rate}Hz, {format_name.get(self.optimal_format, '未知')}")
+                print(f"悅耳進度條：緩衝區大小：{self.frames_per_buffer} frames (約{buffer_ms:.1f}ms)")
+                print(f"悅耳進度條：溢出處理：{'停用（32位兼容）' if not self.exception_on_overflow else '啟用'}")
+                
+        except Exception as e:
+            print(f"悅耳進度條：守護線程：PyAudio流初始化失敗: {e}")
+            self.stream_initialized = False
+            self.pyaudio_instance = None
+            self.audio_stream = None
+
+
+    # 修改init_audio_stream_32bit方法
+    def init_audio_stream_32bit(self):
+        """初始化PyAudio音頻流 - 使用device_monitor提供的設備索引"""
+        if not PYAUDIO_AVAILABLE or self.stream_initialized:
+            return
+        
+        try:
+            self.pyaudio_instance = PyAudio()
+            
+            # 使用檢測到的最佳配置和具體設備索引
+            stream_config = {
+                'format': self.optimal_format,
+                'channels': 1,
+                'rate': self.sample_rate,
+                'output': True,
+                'frames_per_buffer': self.frames_per_buffer
+            }
+            
+            # 如果有具體的設備索引，則指定輸出設備
+            if hasattr(self, 'output_device_index') and self.output_device_index is not None:
+                stream_config['output_device_index'] = self.output_device_index
+                print(f"悅耳進度條：使用指定輸出設備索引: {self.output_device_index}")
+            else:
+                print("悅耳進度條：使用默認輸出設備")
+            
+            self.audio_stream = self.pyaudio_instance.open(**stream_config)
+            self.stream_initialized = True
+            
+            if self.debug_mode:
+                buffer_ms = self.frames_per_buffer / self.sample_rate * 1000
+                format_name = {paInt16: "16位", paInt24: "24位", paFloat32: "32位浮點"}
+                print("悅耳進度條：守護線程：PyAudio音頻流初始化成功（設備優化）")
+                print(f"悅耳進度條：音頻配置：{self.sample_rate}Hz, {format_name.get(self.optimal_format, '未知')}")
+                print(f"悅耳進度條：緩衝區大小：{self.frames_per_buffer} frames (約{buffer_ms:.1f}ms)")
+                print(f"悅耳進度條：溢出處理：{'停用（32位兼容）' if not self.exception_on_overflow else '啟用'}")
+                
+        except Exception as e:
+            print(f"悅耳進度條：守護線程：PyAudio流初始化失敗: {e}")
+            self.stream_initialized = False
+            self.pyaudio_instance = None
+            self.audio_stream = None
+
+    # 修改init_audio_stream_32bit方法
+    def init_audio_stream_32bit(self):
+        """初始化PyAudio音頻流 - 使用device_monitor提供的設備索引"""
+        if not PYAUDIO_AVAILABLE or self.stream_initialized:
+            return
+        
+        try:
+            self.pyaudio_instance = PyAudio()
+            
+            # 使用檢測到的最佳配置和具體設備索引
+            stream_config = {
+                'format': self.optimal_format,
+                'channels': 1,
+                'rate': self.sample_rate,
+                'output': True,
+                'frames_per_buffer': self.frames_per_buffer
+            }
+            
+            # 如果有具體的設備索引，則指定輸出設備
+            if hasattr(self, 'output_device_index') and self.output_device_index is not None:
+                stream_config['output_device_index'] = self.output_device_index
+                print(f"悅耳進度條：使用指定輸出設備索引: {self.output_device_index}")
+            else:
+                print("悅耳進度條：使用默認輸出設備")
             
             self.audio_stream = self.pyaudio_instance.open(**stream_config)
             self.stream_initialized = True
@@ -1091,6 +1375,9 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
     def terminate(self):
         """插件清理"""
         print("悅耳進度條：正在停用（32位優化 + 用戶配置版本）...")
+        # 清理設備監聽器
+        if self.device_monitor:
+            self.device_monitor.stop_monitoring()
         
         # 停用播放
         self.enabled = False
@@ -1124,14 +1411,18 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
         super().terminate()
     
     # 快捷鍵：切換插件（唯一保留的快捷鍵）
-    @script(description="切換悅耳進度條開關", gesture="kb:NVDA+shift+p")
+    @script(
+        description=addonGettext("切換悅耳進度條開關"),
+        gesture="kb:NVDA+shift+p",  # 預設快捷鍵
+        category=addonGettext("悅耳進度條")  # 在輸入手勢對話框中的分類
+    )
     def script_toggleProgressSound(self, gesture):
         self.enabled = not self.enabled
         
         if self.enabled:
-            ui.message("開啟 悅耳進度條")
+            ui.message(addonGettext("開啟 悅耳進度條"))
         else:
-            ui.message("關閉 悅耳進度條")
+            ui.message(addonGettext("關閉 悅耳進度條"))
         
         # 詳細日誌
         state_text = "啟用" if self.enabled else "停用"

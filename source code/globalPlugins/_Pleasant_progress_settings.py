@@ -5,33 +5,83 @@ import wx
 import gui
 from gui import guiHelper
 from gui.settingsDialogs import SettingsPanel
-from ._sineProgressConfig import (
+import os
+import gettext
+import languageHandler
+from ._pleasant_progressconfig import (
     sine_progress_config,
     FADE_ALGORITHMS,
     WAVEFORM_TYPES,
     VOLUME_OPTIONS,
     MIN_FREQUENCY_OPTIONS,
     MAX_FREQUENCY_OPTIONS,
-    DEFAULT_CONFIG  # 新增：直接導入預設配置
+    AUDIO_DURATION_OPTIONS,
+    DEFAULT_CONFIG  # 直接導入預設配置
 )
+
+# =============================================================================
+# 國際化初始化
+# =============================================================================
+def initTranslation():
+    """初始化插件的國際化翻譯"""
+    try:
+        # 獲取插件目錄和locale資料夾路徑
+        addon_dir = os.path.dirname(__file__)  # 獲取當前文件所在目錄（globalPlugins）
+        parent_dir = os.path.dirname(addon_dir)  # 獲取父目錄
+        locale_dir = os.path.join(parent_dir, "locale")  # 父目錄下的locale資料夾
+
+        
+        
+        # 獲取當前NVDA使用的語言
+        lang = languageHandler.getLanguage()
+        
+        # 創建翻譯對象
+        translation = gettext.translation(
+            "nvda",                    # domain name
+            localedir=locale_dir,      # locale資料夾路徑
+            languages=[lang],          # 語言列表
+            fallback=True              # 找不到翻譯時使用原文
+        )
+        
+        # 返回gettext函數
+        return translation.gettext
+        
+    except Exception:
+        # 如果初始化失敗，返回簡單的fallback函數
+        return lambda x: x
+
+# 初始化並獲取翻譯函數
+addonGettext = initTranslation()
+
+# 翻譯字典和常數
+WAVEFORM_TYPES_TRANSLATED = {
+    'sine': addonGettext('正弦波'),
+    'square': addonGettext('方波'), 
+    'triangle': addonGettext('三角波')
+}
+
+FADE_ALGORITHMS_TRANSLATED = {
+    'cosine': addonGettext('余弦'),
+    'gaussian': addonGettext('高斯')
+}
 
 class SineProgressSettingsPanel(SettingsPanel):
     """悅耳進度條設定面板"""
     
     # 設定面板標題
-    title = "悅耳進度條"
+    title = addonGettext("悅耳進度條")
     helpId = "SineProgressSettings"
     
     # 面板描述
-    panelDescription = "配置悅耳進度條的音效參數，包括波形類型、淡入淡出算法、音量和頻率範圍設定。"
+    panelDescription = addonGettext("配置悅耳進度條的音效參數，包括波形類型、淡入淡出算法、音量和頻率範圍設定。")
     
     def makeSettings(self, settingsSizer):
         """創建設定控件"""
         settingsSizerHelper = guiHelper.BoxSizerHelper(self, sizer=settingsSizer)
         
         # 波形類型選擇
-        waveform_label = "波形類型(&W)："
-        waveform_choices = list(WAVEFORM_TYPES.values())  # ['正弦波', '方波', '三角波', ...]
+        waveform_label = addonGettext("波形類型(&W)：")
+        waveform_choices = list(WAVEFORM_TYPES_TRANSLATED.values())  # ['正弦波', '方波', '三角波', ...]
         self.waveform_choice = settingsSizerHelper.addLabeledControl(
             waveform_label,
             wx.Choice,
@@ -44,8 +94,8 @@ class SineProgressSettingsPanel(SettingsPanel):
         self.waveform_choice.SetSelection(waveform_index)
         
         # 淡入淡出算法選擇
-        fade_algorithm_label = "淡入淡出算法(&A)："
-        fade_algorithm_choices = list(FADE_ALGORITHMS.values())  # ['余弦', '高斯']
+        fade_algorithm_label = addonGettext("淡入淡出算法(&A)：")
+        fade_algorithm_choices = list(FADE_ALGORITHMS_TRANSLATED.values())  # ['余弦', '高斯']
         self.fade_algorithm_choice = settingsSizerHelper.addLabeledControl(
             fade_algorithm_label,
             wx.Choice,
@@ -58,7 +108,7 @@ class SineProgressSettingsPanel(SettingsPanel):
         self.fade_algorithm_choice.SetSelection(algorithm_index)
         
         # 音量調整
-        volume_label = "音量調整(&V)："
+        volume_label = addonGettext("音量調整(&V)：")
         volume_choices = [str(vol) for vol in VOLUME_OPTIONS]  # ['0.1', '0.2', ..., '1.0']
         self.volume_choice = settingsSizerHelper.addLabeledControl(
             volume_label,
@@ -74,8 +124,27 @@ class SineProgressSettingsPanel(SettingsPanel):
         except ValueError:
             self.volume_choice.SetSelection(4)  # 預設0.4
         
+                # 波形長度調整
+        duration_label = addonGettext("波形長度(&D)：")
+        duration_choices = [f"{int(duration*1000)}ms" for duration in AUDIO_DURATION_OPTIONS]
+        self.duration_choice = settingsSizerHelper.addLabeledControl(
+            duration_label,
+            wx.Choice,
+            choices=duration_choices
+        )
+        
+        # 設置當前波形長度
+        current_duration = sine_progress_config.get_audio_duration()
+        try:
+            duration_index = AUDIO_DURATION_OPTIONS.index(current_duration)
+            self.duration_choice.SetSelection(duration_index)
+        except ValueError:
+            # 預設80ms (0.08秒)
+            default_index = AUDIO_DURATION_OPTIONS.index(0.08) if 0.08 in AUDIO_DURATION_OPTIONS else 8
+            self.duration_choice.SetSelection(default_index)
+
         # 起點頻率（低頻）
-        min_freq_label = "起點頻率 - 低頻(&L)："
+        min_freq_label = addonGettext("起點頻率 - 低頻(&L)：")
         min_freq_choices = [f"{freq}Hz" for freq in MIN_FREQUENCY_OPTIONS]
         self.min_frequency_choice = settingsSizerHelper.addLabeledControl(
             min_freq_label,
@@ -92,7 +161,7 @@ class SineProgressSettingsPanel(SettingsPanel):
             self.min_frequency_choice.SetSelection(0)  # 預設110Hz
         
         # 終點頻率（高頻）
-        max_freq_label = "終點頻率 - 高頻(&H)："
+        max_freq_label = addonGettext("終點頻率 - 高頻(&H)：")
         max_freq_choices = [f"{freq}Hz" for freq in MAX_FREQUENCY_OPTIONS]
         self.max_frequency_choice = settingsSizerHelper.addLabeledControl(
             max_freq_label,
@@ -114,7 +183,7 @@ class SineProgressSettingsPanel(SettingsPanel):
         
         # 恢復到預設值按鈕
         restore_defaults_button = settingsSizerHelper.addItem(
-            wx.Button(self, label="恢復到預設值(&R)")
+            wx.Button(self, label=addonGettext("恢復到預設值(&R)"))
         )
         restore_defaults_button.Bind(wx.EVT_BUTTON, self.onRestoreDefaults)
     
@@ -147,6 +216,11 @@ class SineProgressSettingsPanel(SettingsPanel):
             max_freq_index = MAX_FREQUENCY_OPTIONS.index(default_max_freq)
             self.max_frequency_choice.SetSelection(max_freq_index)
             
+                    # 波形長度
+            default_duration = DEFAULT_CONFIG['audio_duration']
+            duration_index = AUDIO_DURATION_OPTIONS.index(default_duration)
+            self.duration_choice.SetSelection(duration_index)
+
             print("悅耳進度條：UI已重置為預設值，用戶可選擇是否保存")
             
         except Exception as e:
@@ -221,13 +295,18 @@ class SineProgressSettingsPanel(SettingsPanel):
         selected_min_freq = MIN_FREQUENCY_OPTIONS[min_freq_index]
         selected_max_freq = MAX_FREQUENCY_OPTIONS[max_freq_index]
         
+            # 獲取選中的波形長度
+        duration_index = self.duration_choice.GetSelection()
+        selected_duration = AUDIO_DURATION_OPTIONS[duration_index]
+
         # 檢查配置是否有變更
         config_changed = (
             selected_waveform != sine_progress_config.get_waveform_type() or
             selected_algorithm != sine_progress_config.get_fade_algorithm() or
             selected_volume != sine_progress_config.get_volume() or
             selected_min_freq != sine_progress_config.get_min_frequency() or
-            selected_max_freq != sine_progress_config.get_max_frequency()
+            selected_max_freq != sine_progress_config.get_max_frequency() or
+            selected_duration != sine_progress_config.get_audio_duration()  # 新增
         )
         
         if config_changed:
@@ -237,7 +316,8 @@ class SineProgressSettingsPanel(SettingsPanel):
                 fade_algorithm=selected_algorithm,
                 volume=selected_volume,
                 min_frequency=selected_min_freq,
-                max_frequency=selected_max_freq
+                max_frequency=selected_max_freq,
+                audio_duration=selected_duration  # 新增
             )
             
             if success:

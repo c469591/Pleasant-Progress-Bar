@@ -4,6 +4,41 @@
 import os
 import globalVars
 from configobj import ConfigObj
+import gettext
+import languageHandler
+
+# =============================================================================
+# 國際化初始化
+# =============================================================================
+def initTranslation():
+    """初始化插件的國際化翻譯"""
+    try:
+        # 獲取插件目錄和locale資料夾路徑
+        addon_dir = os.path.dirname(__file__)  # 獲取當前文件所在目錄（globalPlugins）
+        parent_dir = os.path.dirname(addon_dir)  # 獲取父目錄
+        locale_dir = os.path.join(parent_dir, "locale")  # 父目錄下的locale資料夾
+
+       
+        # 獲取當前NVDA使用的語言
+        lang = languageHandler.getLanguage()
+        
+        # 創建翻譯對象
+        translation = gettext.translation(
+            "nvda",                    # domain name
+            localedir=locale_dir,      # locale資料夾路徑
+            languages=[lang],          # 語言列表
+            fallback=True              # 找不到翻譯時使用原文
+        )
+        
+        # 返回gettext函數
+        return translation.gettext
+        
+    except Exception:
+        # 如果初始化失敗，返回簡單的fallback函數
+        return lambda x: x
+
+# 初始化並獲取翻譯函數
+addonGettext = initTranslation()
 
 # 配置文件路徑
 CONFIG_FILE_NAME = "sineProgress.ini"
@@ -16,22 +51,23 @@ DEFAULT_CONFIG = {
     'volume': 0.4,                # 音量
     'min_frequency': 110,         # 起點頻率（低頻）
     'max_frequency': 1720,        # 終點頻率（高頻）
+    'audio_duration': 0.08,       # 波形長度（秒）
 }
 
-# 可用選項定義
+# 可用選項定義 - 使用翻譯函數
 FADE_ALGORITHMS = {
-    'cosine': '余弦',
-    'gaussian': '高斯'
+    'cosine': addonGettext('余弦'),
+    'gaussian': addonGettext('高斯')
 }
 
-# 新增：波形類型選項
+# 新增：波形類型選項 - 使用翻譯函數
 WAVEFORM_TYPES = {
-    'sine': '正弦波',
-    'square': '方波', 
-    'triangle': '三角波',
-    'sawtooth': '鋸齒波',
-    'pulse': '脈衝波',
-    'white_noise': '白噪音'
+    'sine': addonGettext('正弦波'),
+    'square': addonGettext('方波'), 
+    'triangle': addonGettext('三角波'),
+    'sawtooth': addonGettext('鋸齒波'),
+    'pulse': addonGettext('脈衝波'),
+    'white_noise': addonGettext('白噪音')
 }
 
 # 生成音量選項（0.1到1.0，步進0.1）
@@ -39,7 +75,10 @@ VOLUME_OPTIONS = [round(i * 0.1, 1) for i in range(1, 11)]
 
 # 生成頻率選項
 MIN_FREQUENCY_OPTIONS = list(range(110, 301, 10))  # 110到300，每10Hz
-MAX_FREQUENCY_OPTIONS = list(range(1200, 1751, 10))  # 1200到1750，每10Hz
+MAX_FREQUENCY_OPTIONS = list(range(1200, 1801, 10))  # 1200到1750，每10Hz
+
+# 新增：生成波形長度選項（40到100毫秒，步進5毫秒）
+AUDIO_DURATION_OPTIONS = [round(i * 0.005, 3) for i in range(8, 21)]  # 0.040到0.100，步進0.005
 
 class SineProgressConfig:
     """悅耳進度條配置管理類"""
@@ -133,7 +172,17 @@ class SineProgressConfig:
             print("悅耳進度條：配置已保存")
         except Exception as e:
             print(f"悅耳進度條：保存配置錯誤: {e}")
-    
+
+    def get_audio_duration(self):
+        """獲取波形長度"""
+        return float(self.config.get('audio_duration', DEFAULT_CONFIG['audio_duration']))
+
+    def set_audio_duration(self, duration):
+        """設置波形長度"""
+        if duration in AUDIO_DURATION_OPTIONS:
+            self.config['audio_duration'] = duration
+            print(f"悅耳進度條：波形長度設為 {duration*1000:.0f}ms")
+
     def get_fade_algorithm(self):
         """獲取淡入淡出算法"""
         return self.config.get('fade_algorithm', DEFAULT_CONFIG['fade_algorithm'])
@@ -189,7 +238,8 @@ class SineProgressConfig:
         return self.get_min_frequency(), self.get_max_frequency()
     
     def update_config(self, fade_algorithm=None, waveform_type=None, volume=None, 
-                     min_frequency=None, max_frequency=None):
+                     min_frequency=None, max_frequency=None, audio_duration=None
+                     ):
         """批量更新配置"""
         config_changed = False
         
@@ -212,7 +262,12 @@ class SineProgressConfig:
         if max_frequency is not None:
             self.set_max_frequency(max_frequency)
             config_changed = True
-        
+
+        # 波形長度參數
+        if audio_duration is not None:
+            self.set_audio_duration(audio_duration)
+            config_changed = True
+    
         if config_changed:
             # 驗證頻率範圍
             if self.get_min_frequency() >= self.get_max_frequency():
