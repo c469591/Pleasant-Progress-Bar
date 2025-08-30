@@ -13,7 +13,7 @@ Pleasant progress bar with sine wave and cosine fade in/out effects →
 ## Download and GitHub Repository
 
 * You can
-[click here to download the latest version](https://github.com/c469591/Pleasant-Progress-Bar/raw/main/pleasant_progress_bar_V0.1.nvda-addon)
+[click here to download V0.2 version](https://github.com/c469591/Pleasant-Progress-Bar/raw/main/historical_version_addon/pleasant_progress_bar_V0.2.nvda-addon)
 of the NVDA add-on.
 * You can also visit my GitHub repository page
 [Click to visit the Pleasant Progress Bar GitHub repository](https://github.com/c469591/Pleasant-Progress-Bar)

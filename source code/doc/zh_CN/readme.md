@@ -13,7 +13,7 @@
 ## 下载和GitHub仓库
 
 * 你可以
-[点击这里下载最新版本](https://github.com/c469591/Pleasant-Progress-Bar/raw/main/pleasant_progress_bar_V0.1.nvda-addon)
+[点击这里下载 V0.2 版本](https://github.com/c469591/Pleasant-Progress-Bar/raw/main/historical_version_addon/pleasant_progress_bar_V0.2.nvda-addon)
 的NVDA插件。
 * 你还可以前往我的github仓库页面
 [点我前往悦耳进度条的github仓库页面](https://github.com/c469591/Pleasant-Progress-Bar)
