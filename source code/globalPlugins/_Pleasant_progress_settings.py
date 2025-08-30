@@ -73,7 +73,7 @@ class SineProgressSettingsPanel(SettingsPanel):
     
     # 設定面板標題
     title = addonGettext("悅耳進度條")
-    helpId = "SineProgressSettings"
+    helpId = "PleasantProgressBarSettings"
     
     # 面板描述
     panelDescription = addonGettext("配置悅耳進度條的音效參數，包括波形類型、淡入淡出算法、音量和頻率範圍設定。")

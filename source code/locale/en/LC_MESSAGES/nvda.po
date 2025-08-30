@@ -1,0 +1,78 @@
+# 悅耳進度條 - 英文翻譯檔案 (POT模板)
+# English translation template for SineProgress NVDA addon
+msgid ""
+msgstr ""
+"Project-Id-Version: \n"
+"POT-Creation-Date: \n"
+"PO-Revision-Date: \n"
+"Last-Translator: \n"
+"Language-Team: \n"
+"Language: en\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"X-Generator: Poedit 3.6\n"
+
+# 插件基本信息
+msgid "悅耳進度條"
+msgstr "Pleasant Progress Bar"
+
+msgid "切換悅耳進度條開關"
+msgstr "Toggle Pleasant Progress Bar on/off"
+
+msgid "開啟 悅耳進度條"
+msgstr "Pleasant Progress Bar enabled"
+
+msgid "關閉 悅耳進度條"
+msgstr "Pleasant Progress Bar disabled"
+
+# 設定面板
+msgid "配置悅耳進度條的音效參數，包括波形類型、淡入淡出算法、音量和頻率範圍設定。"
+msgstr "Configure Pleasant Progress Bar audio parameters including waveform type, fade algorithm, volume and frequency range settings."
+
+msgid "波形類型(&W)："
+msgstr "&Waveform type:"
+
+msgid "淡入淡出算法(&A)："
+msgstr "F&ade algorithm:"
+
+msgid "音量調整(&V)："
+msgstr "&Volume adjustment:"
+
+msgid "起點頻率 - 低頻(&L)："
+msgstr "&Low frequency:"
+
+msgid "終點頻率 - 高頻(&H)："
+msgstr "&High frequency:"
+
+msgid "恢復到預設值(&R)"
+msgstr "&Restore defaults"
+
+msgid "波形長度(&D)："
+msgstr "&Duration:"
+
+# 波形類型選項
+msgid "正弦波"
+msgstr "Sine wave"
+
+msgid "方波"
+msgstr "Square wave"
+
+msgid "三角波"
+msgstr "Triangle wave"
+
+msgid "鋸齒波"
+msgstr "Sawtooth wave"
+
+msgid "脈衝波"
+msgstr "Pulse wave"
+
+msgid "白噪音"
+msgstr "White noise"
+
+# 淡入淡出算法選項
+msgid "余弦"
+msgstr "Cosine"
+
+msgid "高斯"
+msgstr "Gaussian"

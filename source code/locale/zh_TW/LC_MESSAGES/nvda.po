@@ -1,0 +1,78 @@
+# 悅耳進度條 - 繁體中文翻譯檔案
+# Traditional Chinese translation for SineProgress NVDA addon
+msgid ""
+msgstr ""
+"Project-Id-Version: \n"
+"POT-Creation-Date: \n"
+"PO-Revision-Date: \n"
+"Last-Translator: \n"
+"Language-Team: \n"
+"Language: zh_TW\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"X-Generator: Poedit 3.6\n"
+
+# 插件基本信息
+msgid "悅耳進度條"
+msgstr "悅耳進度條"
+
+msgid "切換悅耳進度條開關"
+msgstr "切換悅耳進度條開關"
+
+msgid "開啟 悅耳進度條"
+msgstr "開啟 悅耳進度條"
+
+msgid "關閉 悅耳進度條"
+msgstr "關閉 悅耳進度條"
+
+# 設定面板
+msgid "配置悅耳進度條的音效參數，包括波形類型、淡入淡出算法、音量和頻率範圍設定。"
+msgstr "配置悅耳進度條的音效參數，包括波形類型、淡入淡出算法、音量和頻率範圍設定。"
+
+msgid "波形類型(&W)："
+msgstr "波形類型(&W)："
+
+msgid "淡入淡出算法(&A)："
+msgstr "淡入淡出算法(&A)："
+
+msgid "音量調整(&V)："
+msgstr "音量調整(&V)："
+
+msgid "起點頻率 - 低頻(&L)："
+msgstr "起點頻率 - 低頻(&L)："
+
+msgid "終點頻率 - 高頻(&H)："
+msgstr "終點頻率 - 高頻(&H)："
+
+msgid "恢復到預設值(&R)"
+msgstr "恢復到預設值(&R)"
+
+msgid "波形長度(&D)："
+msgstr "波形長度(&D)："
+
+# 波形類型選項
+msgid "正弦波"
+msgstr "正弦波"
+
+msgid "方波"
+msgstr "方波"
+
+msgid "三角波"
+msgstr "三角波"
+
+msgid "鋸齒波"
+msgstr "鋸齒波"
+
+msgid "脈衝波"
+msgstr "脈衝波"
+
+msgid "白噪音"
+msgstr "白噪音"
+
+# 淡入淡出算法選項
+msgid "余弦"
+msgstr "余弦"
+
+msgid "高斯"
+msgstr "高斯"
