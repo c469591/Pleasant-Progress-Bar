@@ -57,7 +57,10 @@ addonGettext = initTranslation()
 WAVEFORM_TYPES_TRANSLATED = {
     'sine': addonGettext('正弦波'),
     'square': addonGettext('方波'), 
-    'triangle': addonGettext('三角波')
+    'triangle': addonGettext('三角波'),
+    'sawtooth': addonGettext('鋸齒波'),
+    'pulse': addonGettext('脈衝波'),
+    'white_noise': addonGettext('白噪音')
 }
 
 FADE_ALGORITHMS_TRANSLATED = {
