@@ -276,6 +276,91 @@ if PYAUDIO_AVAILABLE:
         def __init__(self):
             pa.initialize()
             self._streams = set()
+            
+            # 添加Host API掃描功能 - 參考ooo.py
+            self.host_apis = self._scan_host_apis()
+            self.preferred_host_api = self._select_preferred_host_api()
+            
+            if self.debug_mode if hasattr(self, 'debug_mode') else False:
+                if self.preferred_host_api:
+                    print(f"悅耳進度條：檢測到首選Host API: {self.preferred_host_api['name']}")
+                else:
+                    print("悅耳進度條：使用默認Host API")
+        
+        def _scan_host_apis(self):
+            """掃描所有可用的Host API - 參考ooo.py"""
+            host_apis = {}
+            try:
+                host_api_count = pa.get_host_api_count()
+                
+                for i in range(host_api_count):
+                    host_api_info = pa.get_host_api_info(i)
+                    
+                    # 直接訪問屬性
+                    api_name = host_api_info.name if hasattr(host_api_info, 'name') else f'Host API {i}'
+                    device_count = host_api_info.deviceCount if hasattr(host_api_info, 'deviceCount') else 0
+                    
+                    host_apis[i] = {
+                        'index': i,
+                        'name': api_name,
+                        'info': host_api_info,
+                        'device_count': device_count
+                    }
+                
+                return host_apis
+            except Exception as e:
+                print(f"悅耳進度條：Host API掃描失敗: {e}")
+                return {}
+
+        def _select_preferred_host_api(self):
+            """選擇首選Host API - 優先WASAPI用於設備名稱獲取"""
+            api_priority = [
+                'Windows WASAPI',
+                'WASAPI', 
+                'Windows DirectSound',
+                'DirectSound',
+                'WDM-KS',
+                'MME'
+            ]
+            
+            for preferred_name in api_priority:
+                for api_index, api_data in self.host_apis.items():
+                    api_name = api_data['name']
+                    if preferred_name.lower() in api_name.lower():
+                        return api_data
+            
+            # 降級到第一個有設備的API
+            for api_index, api_data in self.host_apis.items():
+                if api_data['device_count'] > 0:
+                    return api_data
+            
+            return None
+
+        def get_devices_by_host_api(self, host_api_index):
+            """獲取指定Host API的所有設備 - 參考ooo.py"""
+            devices = []
+            try:
+                total_device_count = pa.get_device_count()
+                
+                for global_index in range(total_device_count):
+                    device_info = pa.get_device_info(global_index)
+                    
+                    # 直接訪問屬性
+                    device_host_api = device_info.hostApi if hasattr(device_info, 'hostApi') else -1
+                    
+                    if device_host_api == host_api_index:
+                        devices.append({
+                            'global_index': global_index,
+                            'name': device_info.name if hasattr(device_info, 'name') else f'Device {global_index}',
+                            'maxOutputChannels': device_info.maxOutputChannels if hasattr(device_info, 'maxOutputChannels') else 0,
+                            'hostApi': device_host_api
+                        })
+                
+                return devices
+                
+            except Exception as e:
+                print(f"悅耳進度條：獲取Host API {host_api_index} 設備失敗: {e}")
+                return []
         
         def terminate(self):
             for stream in self._streams.copy():
@@ -294,9 +379,44 @@ if PYAUDIO_AVAILABLE:
             return get_default_output_device_info()
 
         def get_device_info_by_index(self, device_index):
-            """根據索引獲取設備信息"""
-            # 調用全局函數，而不是自己
-            return get_device_info_by_index(device_index)
+            """獲取設備信息 - 改進版本參考ooo.py"""
+            try:
+                device_info = pa.get_device_info(device_index)
+                
+                # 直接訪問屬性並處理設備名稱
+                name = device_info.name if hasattr(device_info, 'name') else f'Device {device_index}'
+                if isinstance(name, bytes):
+                    name = name.decode('utf-8', errors='ignore')
+                
+                # 建立設備信息字典
+                result = {
+                    'index': device_index,
+                    'name': name.strip() if name else f'Device {device_index}',
+                    'defaultSampleRate': float(device_info.defaultSampleRate) if hasattr(device_info, 'defaultSampleRate') else 44100.0,
+                    'maxOutputChannels': int(device_info.maxOutputChannels) if hasattr(device_info, 'maxOutputChannels') else 0,
+                    'hostApi': device_info.hostApi if hasattr(device_info, 'hostApi') else -1
+                }
+                
+                # 添加Host API名稱
+                host_api_index = result['hostApi']
+                if hasattr(self, 'host_apis') and host_api_index in self.host_apis:
+                    result['host_api_name'] = self.host_apis[host_api_index]['name']
+                else:
+                    result['host_api_name'] = f'Host API {host_api_index}'
+                
+                return result
+                
+            except Exception as e:
+                print(f"悅耳進度條：獲取設備信息失敗: {e}")
+                return {
+                    'index': device_index,
+                    'name': f'Device {device_index}',
+                    'defaultSampleRate': 44100.0,
+                    'maxOutputChannels': 0,
+                    'hostApi': -1,
+                    'host_api_name': 'Unknown',
+                    'error': str(e)
+                }
         
         def _remove_stream(self, stream):
             """移除流"""
@@ -535,21 +655,38 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 
 
     def on_nvda_device_change(self, old_device, new_device):
-        """設備變更回調函數 - 使用device_monitor獲取友好名稱"""
+        """設備變更回調函數 - 重新初始化到新設備"""
         try:
             # 使用device_monitor獲取友好名稱
             if self.device_monitor:
                 friendly_name = self.device_monitor.get_device_friendly_name(new_device)
+                
+                # 獲取新設備的PyAudio索引
+                new_device_index = self.device_monitor.convert_nvda_device_to_pyaudio_index(new_device)
+                if new_device_index is not None:
+                    self.output_device_index = new_device_index
+                    if self.debug_mode:
+                        print(f"悅耳進度條：設備變更 - 新設備索引: {new_device_index}")
+                else:
+                    self.output_device_index = None
+                    if self.debug_mode:
+                        print("悅耳進度條：設備變更 - 使用默認設備")
             else:
                 friendly_name = new_device if new_device and new_device != "default" else "預設設備"
+                self.output_device_index = None
             
             wx.CallAfter(ui.message, f"悅耳進度條已切換到：{friendly_name}")
             
-            # 使用現有的音頻重新初始化邏輯
+            # 重新初始化音頻系統到新設備
             self.reinitialize_audio_system()
             
         except Exception as e:
             print(f"悅耳進度條：處理設備變更時發生錯誤: {e}")
+            # 即使出錯，也嘗試重新初始化音頻系統
+            try:
+                self.reinitialize_audio_system()
+            except Exception as reinit_error:
+                print(f"悅耳進度條：強制重新初始化也失敗: {reinit_error}")
 
     # 修改reinitialize_audio_system方法
     def reinitialize_audio_system(self):
@@ -811,6 +948,14 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
             if hasattr(self, 'output_device_index') and self.output_device_index is not None:
                 stream_config['output_device_index'] = self.output_device_index
                 print(f"悅耳進度條：使用指定輸出設備索引: {self.output_device_index}")
+                
+                # 驗證設備信息
+                try:
+                    device_info = self.pyaudio_instance.get_device_info_by_index(self.output_device_index)
+                    device_name = device_info.get('name', '未知設備')
+                    print(f"悅耳進度條：確認目標設備: {device_name}")
+                except Exception as device_info_error:
+                    print(f"悅耳進度條：無法獲取設備信息: {device_info_error}")
             else:
                 print("悅耳進度條：使用默認輸出設備")
             
@@ -827,51 +972,40 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
                 
         except Exception as e:
             print(f"悅耳進度條：守護線程：PyAudio流初始化失敗: {e}")
-            self.stream_initialized = False
-            self.pyaudio_instance = None
-            self.audio_stream = None
-
-    # 修改init_audio_stream_32bit方法
-    def init_audio_stream_32bit(self):
-        """初始化PyAudio音頻流 - 使用device_monitor提供的設備索引"""
-        if not PYAUDIO_AVAILABLE or self.stream_initialized:
-            return
-        
-        try:
-            self.pyaudio_instance = PyAudio()
-            
-            # 使用檢測到的最佳配置和具體設備索引
-            stream_config = {
-                'format': self.optimal_format,
-                'channels': 1,
-                'rate': self.sample_rate,
-                'output': True,
-                'frames_per_buffer': self.frames_per_buffer
-            }
-            
-            # 如果有具體的設備索引，則指定輸出設備
+            # 如果指定設備失敗，嘗試使用默認設備
             if hasattr(self, 'output_device_index') and self.output_device_index is not None:
-                stream_config['output_device_index'] = self.output_device_index
-                print(f"悅耳進度條：使用指定輸出設備索引: {self.output_device_index}")
+                print("悅耳進度條：指定設備初始化失敗，嘗試使用默認設備")
+                try:
+                    self.cleanup_audio_resources()
+                    # 暫時移除設備索引，使用默認
+                    temp_device_index = self.output_device_index
+                    self.output_device_index = None
+                    
+                    # 重新嘗試初始化
+                    self.pyaudio_instance = PyAudio()
+                    stream_config = {
+                        'format': self.optimal_format,
+                        'channels': 1,
+                        'rate': self.sample_rate,
+                        'output': True,
+                        'frames_per_buffer': self.frames_per_buffer
+                    }
+                    self.audio_stream = self.pyaudio_instance.open(**stream_config)
+                    self.stream_initialized = True
+                    print("悅耳進度條：使用默認設備初始化成功")
+                    
+                    # 恢復設備索引（保留用戶設置）
+                    self.output_device_index = temp_device_index
+                    
+                except Exception as default_error:
+                    print(f"悅耳進度條：默認設備初始化也失敗: {default_error}")
+                    self.stream_initialized = False
+                    self.pyaudio_instance = None
+                    self.audio_stream = None
             else:
-                print("悅耳進度條：使用默認輸出設備")
-            
-            self.audio_stream = self.pyaudio_instance.open(**stream_config)
-            self.stream_initialized = True
-            
-            if self.debug_mode:
-                buffer_ms = self.frames_per_buffer / self.sample_rate * 1000
-                format_name = {paInt16: "16位", paInt24: "24位", paFloat32: "32位浮點"}
-                print("悅耳進度條：守護線程：PyAudio音頻流初始化成功（設備優化）")
-                print(f"悅耳進度條：音頻配置：{self.sample_rate}Hz, {format_name.get(self.optimal_format, '未知')}")
-                print(f"悅耳進度條：緩衝區大小：{self.frames_per_buffer} frames (約{buffer_ms:.1f}ms)")
-                print(f"悅耳進度條：溢出處理：{'停用（32位兼容）' if not self.exception_on_overflow else '啟用'}")
-                
-        except Exception as e:
-            print(f"悅耳進度條：守護線程：PyAudio流初始化失敗: {e}")
-            self.stream_initialized = False
-            self.pyaudio_instance = None
-            self.audio_stream = None
+                self.stream_initialized = False
+                self.pyaudio_instance = None
+                self.audio_stream = None
 
     def start_audio_daemon(self):
         """啟動守護線程進行屬性檢查和播放"""
@@ -1007,8 +1141,13 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
                 try:
                     # 檢查流是否仍然活躍
                     if hasattr(self.audio_stream, 'is_active') and not self.audio_stream.is_active():
-                        print("悅耳進度條：警告：音頻流不活躍，嘗試重新初始化")
+                        print("悅耳進度條：警告：音頻流不活躍，嘗試重新初始化到當前設備")
+                        device_index_backup = getattr(self, 'output_device_index', None)
                         self.cleanup_audio_resources()
+                        # 保持原有的設備索引
+                        if device_index_backup is not None:
+                            self.output_device_index = device_index_backup
+                            print(f"悅耳進度條：恢復設備索引: {device_index_backup}")
                         self.init_audio_stream_32bit()
 
                     if self.audio_stream:
@@ -1025,11 +1164,16 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
                             
                 except Exception as stream_error:
                     print(f"悅耳進度條：音頻流寫入錯誤: {stream_error}")
-                    # 嘗試重新初始化音頻流
+                    # 嘗試重新初始化音頻流，保持當前設備索引
                     try:
+                        device_index_backup = getattr(self, 'output_device_index', None)
                         self.cleanup_audio_resources()
+                        # 保持原有的設備索引
+                        if device_index_backup is not None:
+                            self.output_device_index = device_index_backup
+                            print(f"悅耳進度條：恢復設備索引: {device_index_backup}")
                         self.init_audio_stream_32bit()
-                        print("悅耳進度條：音頻流重新初始化完成（32位模式）")
+                        print("悅耳進度條：音頻流重新初始化完成（32位模式，保持設備）")
                     except Exception as init_error:
                         print(f"悅耳進度條：音頻流重新初始化失敗: {init_error}")
             

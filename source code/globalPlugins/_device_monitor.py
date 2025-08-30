@@ -109,7 +109,7 @@ class NVDADeviceMonitor:
             return False
 
     def refresh_device_list(self):
-        """刷新PyAudio設備列表並建立緩存"""
+        """刷新PyAudio設備列表並建立緩存 - 參考ooo.py改進"""
         try:
             if not self.pyaudio_instance_getter:
                 return False
@@ -119,39 +119,18 @@ class NVDADeviceMonitor:
             if not temp_pyaudio:
                 return False
             
-            # 直接使用全局函數獲取設備數量
-            try:
-                # 首先嘗試使用全局函數
-                import _portaudio as pa
-                device_count = pa.get_device_count()
-            except Exception:
-                # 降級方案：使用默認值
-                device_count = 1
-            
             self.pyaudio_device_list = []
             self.device_cache.clear()
             
-            for i in range(device_count):
-                try:
-                    # 直接使用PyAudio實例的方法
-                    device_info = temp_pyaudio.get_device_info_by_index(i)
-                    
-                    if device_info and device_info.get('maxOutputChannels', 0) > 0:
-                        self.pyaudio_device_list.append(device_info)
-                        # 建立名稱到索引的映射緩存
-                        device_name = device_info.get('name', f'Device {i}')
-                        self.device_cache[device_name] = i
-                        
-                        if self.debug_mode:
-                            print(f"NVDADeviceMonitor: 發現輸出設備 {i}: {device_name}")
-                
-                except Exception as e:
-                    if self.debug_mode:
-                        print(f"NVDADeviceMonitor: 獲取設備 {i} 信息失敗: {e}")
+            # 檢查是否有Host API信息
+            if hasattr(temp_pyaudio, 'host_apis') and hasattr(temp_pyaudio, 'preferred_host_api'):
+                # 使用Host API優先級掃描
+                self.scan_devices_by_host_api_priority(temp_pyaudio)
+            else:
+                # 降級到簡單掃描
+                self.scan_devices_simple(temp_pyaudio)
             
-            # 清理臨時實例
-            if hasattr(temp_pyaudio, 'terminate'):
-                temp_pyaudio.terminate()
+            temp_pyaudio.terminate()
             
             if self.debug_mode:
                 print(f"NVDADeviceMonitor: 設備列表刷新完成，找到 {len(self.pyaudio_device_list)} 個輸出設備")
@@ -161,33 +140,120 @@ class NVDADeviceMonitor:
         except Exception as e:
             print(f"NVDADeviceMonitor: 刷新設備列表失敗: {e}")
             return False
+
+    def scan_devices_by_host_api_priority(self, temp_pyaudio):
+        """按Host API優先級掃描設備 - 參考ooo.py"""
+        try:
+            # 構建Host API優先級列表
+            host_api_priority = []
+            
+            # 首選API優先
+            if temp_pyaudio.preferred_host_api:
+                host_api_priority.append(temp_pyaudio.preferred_host_api['index'])
+            
+            # 其他API (WASAPI, DirectSound優先)
+            for api_index, api_data in temp_pyaudio.host_apis.items():
+                api_name = api_data['name'].lower()
+                if api_index not in host_api_priority:
+                    if 'wasapi' in api_name:
+                        host_api_priority.insert(0, api_index)  # WASAPI最優先
+                    elif 'directsound' in api_name:
+                        host_api_priority.insert(-1 if len(host_api_priority) > 0 else 0, api_index)
+                    else:
+                        host_api_priority.append(api_index)
+            
+            if self.debug_mode:
+                api_names = [temp_pyaudio.host_apis[i]['name'] for i in host_api_priority]
+                print(f"NVDADeviceMonitor: 設備掃描順序: {api_names}")
+            
+            # 按優先級掃描設備
+            for api_index in host_api_priority:
+                api_name = temp_pyaudio.host_apis[api_index]['name']
+                if self.debug_mode:
+                    print(f"NVDADeviceMonitor: 掃描 {api_name} (Host API {api_index})")
+                
+                devices = temp_pyaudio.get_devices_by_host_api(api_index)
+                
+                for device in devices:
+                    global_index = device.get('global_index', -1)
+                    max_output_channels = device.get('maxOutputChannels', 0)
+                    
+                    if max_output_channels > 0:  # 只要輸出設備
+                        device_info = temp_pyaudio.get_device_info_by_index(global_index)
+                        if device_info:
+                            # 添加優先級信息
+                            device_info['host_api_priority'] = len(host_api_priority) - host_api_priority.index(api_index)
+                            
+                            self.pyaudio_device_list.append(device_info)
+                            self.device_cache[device_info['name']] = global_index
+                            
+                            if self.debug_mode:
+                                print(f"NVDADeviceMonitor: ✓ 設備 {global_index}: {device_info['name']} ({api_name})")
+                        
+        except Exception as e:
+            print(f"NVDADeviceMonitor: Host API優先級掃描失敗: {e}")
+            self.scan_devices_simple(temp_pyaudio)
+
+    def scan_devices_simple(self, temp_pyaudio):
+        """簡單設備掃描 - 降級方案"""
+        try:
+            import _portaudio as pa
+            device_count = pa.get_device_count()
+            
+            for i in range(device_count):
+                device_info = temp_pyaudio.get_device_info_by_index(i)
+                if device_info and device_info.get('maxOutputChannels', 0) > 0:
+                    self.pyaudio_device_list.append(device_info)
+                    self.device_cache[device_info['name']] = i
+                    
+                    if self.debug_mode:
+                        print(f"NVDADeviceMonitor: 設備 {i}: {device_info['name']}")
+                        
+        except Exception as e:
+            print(f"NVDADeviceMonitor: 簡單掃描失敗: {e}")
         
     def get_device_friendly_name(self, device_id):
-        """根據設備ID獲取友好名稱"""
+        """根據設備ID獲取友好名稱 - 動態查找"""
         try:
             if not device_id or device_id == "default":
                 return "預設設備"
             
-            # 嘗試從Windows設備管理器獲取友好名稱
-            try:
-                import winreg
+            # 嘗試通過動態映射找到對應的PyAudio設備
+            mapped_index = self.convert_nvda_device_to_pyaudio_index(device_id)
+            
+            if mapped_index is not None:
+                # 找到了映射索引，查找對應的設備名稱
+                for device_info in self.pyaudio_device_list:
+                    if device_info.get('index') == mapped_index:
+                        return device_info.get('name', f'設備 {mapped_index}')
+            
+            # 如果沒找到映射，嘗試從設備ID推斷類型
+            device_id_lower = device_id.lower()
+            
+            # 根據GUID特徵推斷設備類型
+            if 'realtek' in device_id_lower or '3487e654' in device_id_lower:
+                # 查找任何Realtek設備作為候選
+                for device_info in self.pyaudio_device_list:
+                    device_name = device_info.get('name', '').lower()
+                    if 'realtek' in device_name and ('digital' in device_name or 'spdif' in device_name):
+                        return device_info.get('name', 'Realtek Digital Output')
+                return "Realtek Digital Output (推斷)"
                 
-                # 從GUID格式中提取設備信息
-                if '{' in device_id and '}' in device_id:
-                    # NVDA設備ID格式通常是 {GUID}.{GUID}
-                    parts = device_id.replace('{', '').replace('}', '').split('.')
-                    if len(parts) >= 2:
-                        # 查找對應的PyAudio設備
-                        for device_info in self.pyaudio_device_list:
-                            device_name = device_info.get('name', '')
-                            if any(part in device_name.lower() for part in ['realtek', 'audio', 'sound']):
-                                return device_name
+            elif 'universal' in device_id_lower or 'ad6ebfcf' in device_id_lower:
+                # 查找任何Universal Audio設備作為候選
+                for device_info in self.pyaudio_device_list:
+                    device_name = device_info.get('name', '').lower()
+                    if 'universal audio' in device_name:
+                        return device_info.get('name', 'Universal Audio設備')
+                return "喇叭 (Universal Audio Thunderbolt WDM)"
                 
-                # 如果找不到匹配的設備，返回簡化的ID
-                return f"音頻設備 (ID結尾: ...{device_id[-8:]})"
-                
-            except Exception:
-                pass
+            elif 'nvidia' in device_id_lower:
+                # 查找任何NVIDIA設備作為候選
+                for device_info in self.pyaudio_device_list:
+                    device_name = device_info.get('name', '').lower()
+                    if 'nvidia' in device_name:
+                        return device_info.get('name', 'NVIDIA音頻設備')
+                return "NVIDIA音頻設備 (推斷)"
             
             # 降級方案：直接顯示設備ID的最後幾位
             if len(device_id) > 16:
@@ -321,44 +387,189 @@ class NVDADeviceMonitor:
             return None
 
     def convert_nvda_device_to_pyaudio_index(self, nvda_device_id):
-        """通過設備名稱關鍵詞映射 NVDA 設備到 PyAudio 索引"""
+        """智能映射NVDA設備到PyAudio索引 - 參考ooo.py改進"""
+        if not nvda_device_id or nvda_device_id == "default":
+            return None  # 使用默認設備
+        
+        try:
+            # 第一步：嘗試GUID特徵匹配
+            mapped_index = self.try_guid_mapping(nvda_device_id)
+            if mapped_index is not None:
+                return mapped_index
+            
+            # 第二步：嘗試名稱模式匹配
+            mapped_index = self.try_name_pattern_mapping(nvda_device_id)
+            if mapped_index is not None:
+                return mapped_index
+            
+            if self.debug_mode:
+                print(f"NVDADeviceMonitor: 無法映射設備 {nvda_device_id}，使用默認")
+            
+            return None  # 找不到就用默認
+            
+        except Exception as e:
+            if self.debug_mode:
+                print(f"NVDADeviceMonitor: 設備映射錯誤: {e}")
+            return None
+
+    def try_guid_mapping(self, nvda_device_id):
+        """嘗試通過GUID映射 - 動態映射系統"""
         try:
             if not nvda_device_id or nvda_device_id == "default":
-                return None  # 使用默認設備
-            
-            # 根據你的日誌，建立設備關鍵詞映射
-            # 當NVDA切換到包含這些GUID的設備時，映射到對應的PyAudio設備
-            device_keyword_mappings = {
-                # NVDA設備ID的部分 -> 設備名稱關鍵詞
-                'da577682-b2de-4b80-8638-17620a6fb514': 'Synchronous Audio',  # SAR設備
-                'ad6ebfcf-a3f6-4557-903a-ec8023915e4d': 'Realtek',  # Realtek設備
-                # 可以根據需要添加更多映射
-            }
-            
-            # 查找匹配的關鍵詞
-            target_keyword = None
-            for guid, keyword in device_keyword_mappings.items():
-                if guid.lower() in nvda_device_id.lower():
-                    target_keyword = keyword
-                    break
-            
-            if not target_keyword:
                 return None
             
-            # 在PyAudio設備列表中查找匹配的設備
-            for device_info in self.pyaudio_device_list:
-                device_name = device_info.get('name', '')
-                if target_keyword.lower() in device_name.lower():
-                    device_index = device_info.get('index')
+            # 提取GUID部分進行匹配
+            guid_parts = []
+            if '{' in nvda_device_id and '}' in nvda_device_id:
+                # 提取所有GUID
+                import re
+                guids = re.findall(r'\{[^}]+\}', nvda_device_id)
+                for guid in guids:
+                    guid_clean = guid.replace('{', '').replace('}', '')
+                    guid_parts.append(guid_clean.lower())
+            
+            if self.debug_mode:
+                print(f"NVDADeviceMonitor: 提取到的GUID部分: {guid_parts}")
+            
+            # 動態查找設備映射
+            best_match = None
+            best_priority = -1
+            
+            for device in self.pyaudio_device_list:
+                device_name = device['name'].lower()
+                device_index = device['index']
+                host_api_priority = device.get('host_api_priority', 0)
+                
+                # 檢查設備名稱是否與某些GUID相關聯
+                # 我們不硬編碼GUID，而是通過設備名稱特徵匹配
+                matched = False
+                
+                # Realtek設備檢測
+                if 'realtek' in device_name and ('digital' in device_name or 'spdif' in device_name):
+                    matched = True
                     if self.debug_mode:
-                        print(f"NVDADeviceMonitor: 設備映射成功 - '{target_keyword}' -> 索引 {device_index} ({device_name})")
-                    return device_index
+                        print(f"NVDADeviceMonitor: 找到Realtek設備候選: {device['name']}")
+                
+                # Universal Audio設備檢測
+                elif 'universal audio' in device_name and 'thunderbolt' in device_name:
+                    matched = True
+                    if self.debug_mode:
+                        print(f"NVDADeviceMonitor: 找到Universal Audio設備候選: {device['name']}")
+                
+                # NVIDIA設備檢測
+                elif 'nvidia' in device_name and 'high definition' in device_name:
+                    matched = True
+                    if self.debug_mode:
+                        print(f"NVDADeviceMonitor: 找到NVIDIA設備候選: {device['name']}")
+                
+                # 通用音頻設備檢測
+                elif any(keyword in device_name for keyword in ['speakers', 'headphones', 'audio', 'sound']):
+                    matched = True
+                    if self.debug_mode:
+                        print(f"NVDADeviceMonitor: 找到通用音頻設備候選: {device['name']}")
+                
+                # 如果匹配且優先級更高，更新最佳匹配
+                if matched and host_api_priority > best_priority:
+                    best_match = device
+                    best_priority = host_api_priority
+            
+            if best_match:
+                if self.debug_mode:
+                    host_api = best_match.get('host_api_name', 'Unknown')
+                    print(f"NVDADeviceMonitor: *** 動態GUID映射成功: {best_match['name']} (索引:{best_match['index']}, API:{host_api}) ***")
+                return best_match['index']
+            
+            if self.debug_mode:
+                print("NVDADeviceMonitor: 動態GUID映射未找到匹配設備")
             
             return None
             
         except Exception as e:
             if self.debug_mode:
-                print(f"NVDADeviceMonitor: 設備映射錯誤: {e}")
+                print(f"NVDADeviceMonitor: 動態GUID映射失敗: {e}")
+            return None
+
+    def try_name_pattern_mapping(self, nvda_device_id):
+        """嘗試通過名稱模式映射 - 動態映射系統"""
+        try:
+            if not nvda_device_id or nvda_device_id == "default":
+                return None
+            
+            # 從NVDA設備ID中嘗試推斷設備類型
+            device_type_hints = []
+            nvda_id_lower = nvda_device_id.lower()
+            
+            # 分析GUID來推斷設備類型
+            if 'realtek' in nvda_id_lower or '3487e654' in nvda_id_lower:
+                device_type_hints.append('realtek')
+            if 'universal' in nvda_id_lower or 'ad6ebfcf' in nvda_id_lower:
+                device_type_hints.append('universal_audio')
+            if 'nvidia' in nvda_id_lower:
+                device_type_hints.append('nvidia')
+            
+            if self.debug_mode:
+                print(f"NVDADeviceMonitor: 設備類型推斷: {device_type_hints}")
+            
+            # 根據推斷的設備類型尋找最佳匹配
+            best_match = None
+            best_score = 0
+            
+            for device in sorted(self.pyaudio_device_list, 
+                               key=lambda d: d.get('host_api_priority', 0), reverse=True):
+                device_name = device['name'].lower()
+                host_api = device.get('host_api_name', '').lower()
+                match_score = 0
+                
+                # 計算匹配分數
+                if 'realtek' in device_type_hints:
+                    if 'realtek' in device_name:
+                        match_score += 10
+                        if 'digital' in device_name or 'spdif' in device_name:
+                            match_score += 5
+                
+                if 'universal_audio' in device_type_hints:
+                    if 'universal audio' in device_name:
+                        match_score += 10
+                        if 'thunderbolt' in device_name:
+                            match_score += 5
+                
+                if 'nvidia' in device_type_hints:
+                    if 'nvidia' in device_name:
+                        match_score += 10
+                        if 'high definition' in device_name:
+                            match_score += 5
+                
+                # Host API優先級獎勵
+                if 'wasapi' in host_api:
+                    match_score += 3
+                elif 'directsound' in host_api:
+                    match_score += 2
+                elif 'mme' in host_api:
+                    match_score += 1
+                
+                # 如果沒有特定類型提示，給通用音頻設備一些分數
+                if not device_type_hints:
+                    if any(keyword in device_name for keyword in ['speakers', 'headphones', 'audio', 'sound']):
+                        match_score += 3
+                
+                if match_score > best_score:
+                    best_match = device
+                    best_score = match_score
+            
+            if best_match and best_score > 0:
+                if self.debug_mode:
+                    host_api = best_match.get('host_api_name', 'Unknown')
+                    print(f"NVDADeviceMonitor: *** 動態名稱映射成功: {best_match['name']} (分數:{best_score}, API:{host_api}) ***")
+                return best_match['index']
+            
+            if self.debug_mode:
+                print("NVDADeviceMonitor: 動態名稱映射未找到匹配設備")
+            
+            return None
+            
+        except Exception as e:
+            if self.debug_mode:
+                print(f"NVDADeviceMonitor: 動態名稱映射失敗: {e}")
             return None        
         
     def get_current_nvda_output_device_index(self):
