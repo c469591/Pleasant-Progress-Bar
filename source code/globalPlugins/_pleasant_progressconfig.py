@@ -18,21 +18,33 @@ def initTranslation():
         parent_dir = os.path.dirname(addon_dir)  # 獲取父目錄
         locale_dir = os.path.join(parent_dir, "locale")  # 父目錄下的locale資料夾
 
-       
+
         # 獲取當前NVDA使用的語言
         lang = languageHandler.getLanguage()
-        
+
+        # 構建語言回退列表
+        languages = [lang]  # 首先嘗試完整語言代碼
+
+        # 如果語言代碼包含下劃線，也嘗試主要語言代碼
+        if '_' in lang:
+            main_lang = lang.split('_')[0]
+            languages.append(main_lang)
+
+        # 如果不是中文，添加英文作為回退
+        if not lang.startswith('zh'):
+            languages.append('en')
+
         # 創建翻譯對象
         translation = gettext.translation(
             "nvda",                    # domain name
             localedir=locale_dir,      # locale資料夾路徑
-            languages=[lang],          # 語言列表
+            languages=languages,       # 語言回退列表
             fallback=True              # 找不到翻譯時使用原文
         )
-        
+
         # 返回gettext函數
         return translation.gettext
-        
+
     except Exception:
         # 如果初始化失敗，返回簡單的fallback函數
         return lambda x: x
