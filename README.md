@@ -13,7 +13,7 @@
 ## 下載和GitHub倉庫
 
 * 你可以
-[點擊這裡下載 V0.2 版本](https://github.com/c469591/Pleasant-Progress-Bar/raw/main/historical_version_addon/pleasant_progress_bar_V0.2.nvda-addon)
+[點擊這裡下載 V0.21 版本](https://github.com/c469591/Pleasant-Progress-Bar/raw/main/historical_version_addon/pleasant_progress_bar_V0.21.nvda-addon)
 的NVDA插件。
 * 你還可以前往我的github倉庫頁面
 [點我前往悅耳進度條的github倉庫頁面](https://github.com/c469591/Pleasant-Progress-Bar)
@@ -106,6 +106,10 @@ c469591@mail.batol.net
 [小羔羊分享站](https://lamb.tw/)
 
 ## 📋 更新日誌
+
+### V0.21
+
+* 對於不支援的系統語言，一律使用英文，其他功能沒有變化
 
 ### V0.2
 
