@@ -773,6 +773,7 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
         if not PYAUDIO_AVAILABLE:
             # 後備默認值
             self.sample_rate = 48000
+            paInt16 = 8
             self.optimal_format = paInt16
             self.output_device_index = None
             print("悅耳進度條：PyAudio不可用，使用默認音頻參數")
