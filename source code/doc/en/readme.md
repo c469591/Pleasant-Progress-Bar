@@ -13,14 +13,14 @@ Pleasant progress bar with sine wave and cosine fade in/out effects →
 ## Download and GitHub Repository
 
 * You can
-[click here to download V0.21 version](https://github.com/c469591/Pleasant-Progress-Bar/raw/main/historical_version_addon/pleasant_progress_bar_V0.21.nvda-addon)
+[click here to download V0.22 version](https://github.com/c469591/Pleasant-Progress-Bar/raw/main/pleasant_progress_bar_V0.22.nvda-addon)
 of the NVDA add-on.
 * You can also visit my GitHub repository page
 [Click to visit the Pleasant Progress Bar GitHub repository](https://github.com/c469591/Pleasant-Progress-Bar)
 
 ## Compatibility
 
-Theoretically supports all versions after 2019.3, but only tested on NVDA 2025.2.
+Theoretically supports all versions after 2019.3. Tested on NVDA 2026.1 (64-bit, Python 3.13). Backward compatibility with 32-bit NVDA is preserved.
 
 ## 🚀 Features
 
@@ -106,6 +106,13 @@ c469591@mail.batol.net
 [Little Lamb Sharing Station](https://lamb.tw/)
 
 ## 📋 Changelog
+
+### V0.22
+
+* Added compatibility with NVDA 2026.1 (64-bit, Python 3.13)
+* Kept the 32-bit .pyd for backward compatibility with NVDA 2024 and earlier
+* Cleaned up misleading "32-bit optimization" naming in code (no behavior change)
+* Fixed author email format in manifest
 
 ### V0.21
 
