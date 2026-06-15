@@ -1114,6 +1114,10 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
             if self.enabled and PYAUDIO_AVAILABLE and self.thread_running:
                 # 調用回調函數請求播放（立即返回，不阻塞）
                 self.request_audio_play(hz)
+                # 通知 NVDA Remote 把此事件送到主控端（被控端本機已改播悅耳波形，
+                # 但自訂波形走 PyAudio 不經 NVDA 音訊系統，遠端無從得知，
+                # 必須手動觸發 tones.decide_beep 讓 FollowerSession 的 outbound handler 傳送）
+                self.notify_remote_beep(hz, length, left, right)
                 return  # 不播放原始音效
             elif self.enabled:
                 print("悅耳進度條：守護線程：PyAudio不可用，使用原始音效")
@@ -1123,6 +1127,28 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
         # 播放原始音效（進度條音效且插件停用時，或者非進度條音效時）
         if self.original_beep:
             self.original_beep(hz, length, left, right)
+
+    def notify_remote_beep(self, hz, length, left, right):
+        """觸發 tones.decide_beep，讓 NVDA Remote 把進度條事件傳到主控端。
+
+        - NVDA 2023.1+（含內建 Remote 與新版 NVDA Remote 附加元件）以
+          tones.decide_beep extension point 攔截提示音；被控端的 FollowerSession
+          會在此 extension point 註冊 outbound handler，把參數送到主控端，
+          主控端再以 localMachine.beep -> tones.beep 重播。
+        - 主控端若也裝了本附加元件，會於該處被 hook 攔截並重算悅耳波形；
+          若未裝，則播放原始進度條提示音（至少不會靜音）。
+        - 只能傳 hz/length/left/right 四個參數：localMachine.beep 簽章不接受
+          isSpeechBeepCommand，多傳會讓主控端拋 TypeError。
+        - 未連線或 NVDA < 2023.1（無 decide_beep）時，此呼叫為近乎零成本的 no-op，
+          舊版本的傳輸交由舊版 NVDA Remote 直接 monkey-patch tones.beep 處理。
+        """
+        try:
+            decide_beep = getattr(tones, 'decide_beep', None)
+            if decide_beep is None:
+                return
+            decide_beep.decide(hz=hz, length=length, left=left, right=right)
+        except Exception as e:
+            print(f"悅耳進度條：通知遠端音效失敗: {e}")
 
     def old_generate_clean_sine_wave_32bit(self, frequency, duration=0.08, sample_rate=44100, volume=0.6):
         """純Python生成乾淨的正弦波音效 - 32位優化版本（余弦淡入淡出）"""
