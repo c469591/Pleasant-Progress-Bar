@@ -1112,8 +1112,8 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
         若不接收這些參數，凡是帶關鍵字參數的原始提示音都會在此無聲；舊版 NVDA 的
         tones.beep 不會傳這些參數，因此 kwargs 為空也相容。
         """
-        # 檢查是否為進度條音效
-        if self.is_progress_beep(hz, length, left, right):
+        # 檢查是否為進度條音效（語音序列 beep 會經 isSpeechBeepCommand 被排除）
+        if self.is_progress_beep(hz, length, left, right, **kwargs):
             if self.debug_mode:
                 print(f"悅耳進度條：識別為進度條音效: {hz}Hz")
             
@@ -1369,8 +1369,16 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
             else:
                 return sample
 
-    def is_progress_beep(self, hz, length, left, right):
-        """檢查是否為進度條音效"""
+    def is_progress_beep(self, hz, length, left, right, **kwargs):
+        """檢查是否為進度條音效
+
+        語音序列 BeepCommand（大寫字母、行縮排提示音等）會帶 isSpeechBeepCommand=True，
+        其頻率/長度可能落在下列範圍內而被誤判為進度條。這類音效應跟著語音時機由原始
+        tones.beep 播放，故直接排除。此旗標自 NVDA 2023.1 (#14503) 起才有；舊版 NVDA
+        不會傳入，kwargs 為空時不影響判定，維持既有行為（向下相容）。
+        """
+        if kwargs.get("isSpeechBeepCommand"):
+            return False
         return (
             110 <= hz <= 1800 and
             38 <= length <= 42 and
