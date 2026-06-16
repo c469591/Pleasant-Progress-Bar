@@ -1104,8 +1104,14 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
             self.original_beep = None
             print("悅耳進度條：已恢復原始tones.beep函數")
     
-    def optimized_beep(self, hz, length, left=50, right=50):
-        """接管 tones.beep：識別進度條音效並改用悅耳波形，其它音效照原樣播放"""
+    def optimized_beep(self, hz, length, left=50, right=50, **kwargs):
+        """接管 tones.beep：識別進度條音效並改用悅耳波形，其它音效照原樣播放
+
+        以 **kwargs 接收並原樣轉發新版 NVDA 經 tones.beep 帶入的關鍵字參數（例如
+        語音序列 BeepCommand 的 isSpeechBeepCommand，用於大寫字母、行縮排提示音等）。
+        若不接收這些參數，凡是帶關鍵字參數的原始提示音都會在此無聲；舊版 NVDA 的
+        tones.beep 不會傳這些參數，因此 kwargs 為空也相容。
+        """
         # 檢查是否為進度條音效
         if self.is_progress_beep(hz, length, left, right):
             if self.debug_mode:
@@ -1122,7 +1128,7 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
         
         # 播放原始音效（進度條音效且插件停用時，或者非進度條音效時）
         if self.original_beep:
-            self.original_beep(hz, length, left, right)
+            self.original_beep(hz, length, left, right, **kwargs)
 
     def old_generate_clean_sine_wave_32bit(self, frequency, duration=0.08, sample_rate=44100, volume=0.6):
         """純Python生成乾淨的正弦波音效 - 32位優化版本（余弦淡入淡出）"""
