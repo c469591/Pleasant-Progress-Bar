@@ -13,14 +13,14 @@
 ## 下载和GitHub仓库
 
 * 你可以
-[点击这里下载 V0.21 版本](https://github.com/c469591/Pleasant-Progress-Bar/raw/main/historical_version_addon/pleasant_progress_bar_V0.21.nvda-addon)
+[点击这里下载 V0.22 版本](https://github.com/c469591/Pleasant-Progress-Bar/raw/main/pleasant_progress_bar_V0.22.nvda-addon)
 的NVDA插件。
 * 你还可以前往我的github仓库页面
 [点我前往悦耳进度条的github仓库页面](https://github.com/c469591/Pleasant-Progress-Bar)
 
 ## 兼容性
 
-理论上支持2019.3之后的所有版本，但仅在nvda2025.2上进行测试。
+理论上支持2019.3之后的所有版本，已在nvda2026.1（64-bit, Python 3.13）测试通过，旧版32-bit NVDA也保留兼容。
 
 ## 🚀 功能特色
 
@@ -106,6 +106,13 @@ c469591@mail.batol.net
 [小羔羊分享站](https://lamb.tw/)
 
 ## 📋 更新日志
+
+### V0.22
+
+* 新增对NVDA 2026.1（64-bit, Python 3.13）的兼容性
+* 同时保留32-bit版本，向下兼容NVDA 2024及更旧版本
+* 代码整理：清除误导的「32位优化」命名与注释（功能不变）
+* 修正manifest中author email格式
 
 ### V0.21
 
