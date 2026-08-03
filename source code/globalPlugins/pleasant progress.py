@@ -765,8 +765,7 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
         if not PYAUDIO_AVAILABLE:
             # 後備默認值
             self.sample_rate = 48000
-            paInt16 = 8
-            self.optimal_format = paInt16
+            self.optimal_format = 8  # PortAudio's paInt16 value
             self.output_device_index = None
             return
         
