@@ -6,6 +6,7 @@ import globalVars
 from configobj import ConfigObj
 import gettext
 import languageHandler
+from logHandler import log
 
 # =============================================================================
 # 國際化初始化
@@ -104,16 +105,14 @@ class SineProgressConfig:
         try:
             if os.path.exists(CONFIG_FILE_PATH):
                 self.config = ConfigObj(CONFIG_FILE_PATH, encoding='utf-8')
-                print("悅耳進度條：配置文件載入成功")
             else:
                 self.config = ConfigObj(encoding='utf-8')
-                print("悅耳進度條：配置文件不存在，使用預設配置")
             
             # 確保所有必要的配置項存在
             self._ensure_config_completeness()
             
         except Exception as e:
-            print(f"悅耳進度條：載入配置文件錯誤: {e}")
+            log.error("悅耳進度條：載入配置文件錯誤: %s", e)
             self.config = ConfigObj(encoding='utf-8')
             self._apply_default_config()
     
@@ -125,7 +124,6 @@ class SineProgressConfig:
             if key not in self.config:
                 self.config[key] = default_value
                 config_changed = True
-                print(f"悅耳進度條：補充配置項 {key} = {default_value}")
         
         # 驗證配置值的有效性
         if not self._validate_config():
@@ -140,18 +138,18 @@ class SineProgressConfig:
         try:
             # 驗證淡入淡出算法
             if self.config.get('fade_algorithm') not in FADE_ALGORITHMS:
-                print("悅耳進度條：無效的淡入淡出算法配置")
+                log.warning("悅耳進度條：無效的淡入淡出算法配置")
                 return False
             
             # 驗證波形類型
             if self.config.get('waveform_type') not in WAVEFORM_TYPES:
-                print("悅耳進度條：無效的波形類型配置")
+                log.warning("悅耳進度條：無效的波形類型配置")
                 return False
             
             # 驗證音量
             volume = float(self.config.get('volume', 0.5))
             if volume not in VOLUME_OPTIONS:
-                print("悅耳進度條：無效的音量配置")
+                log.warning("悅耳進度條：無效的音量配置")
                 return False
             
             # 驗證頻率範圍
@@ -161,29 +159,27 @@ class SineProgressConfig:
             if (min_freq not in MIN_FREQUENCY_OPTIONS or 
                 max_freq not in MAX_FREQUENCY_OPTIONS or
                 min_freq >= max_freq):
-                print("悅耳進度條：無效的頻率範圍配置")
+                log.warning("悅耳進度條：無效的頻率範圍配置")
                 return False
             
             return True
             
         except (ValueError, TypeError) as e:
-            print(f"悅耳進度條：配置驗證錯誤: {e}")
+            log.warning("悅耳進度條：配置驗證錯誤: %s", e)
             return False
     
     def _apply_default_config(self):
         """應用預設配置"""
         for key, value in DEFAULT_CONFIG.items():
             self.config[key] = value
-        print("悅耳進度條：已應用預設配置")
     
     def save_config(self):
         """保存配置到文件"""
         try:
             self.config.filename = CONFIG_FILE_PATH
             self.config.write()
-            print("悅耳進度條：配置已保存")
         except Exception as e:
-            print(f"悅耳進度條：保存配置錯誤: {e}")
+            log.error("悅耳進度條：保存配置錯誤: %s", e)
 
     def get_audio_duration(self):
         """獲取波形長度"""
@@ -193,7 +189,6 @@ class SineProgressConfig:
         """設置波形長度"""
         if duration in AUDIO_DURATION_OPTIONS:
             self.config['audio_duration'] = duration
-            print(f"悅耳進度條：波形長度設為 {duration*1000:.0f}ms")
 
     def get_fade_algorithm(self):
         """獲取淡入淡出算法"""
@@ -203,7 +198,6 @@ class SineProgressConfig:
         """設置淡入淡出算法"""
         if algorithm in FADE_ALGORITHMS:
             self.config['fade_algorithm'] = algorithm
-            print(f"悅耳進度條：淡入淡出算法設為 {FADE_ALGORITHMS[algorithm]}")
     
     def get_waveform_type(self):
         """獲取波形類型"""
@@ -213,7 +207,6 @@ class SineProgressConfig:
         """設置波形類型"""
         if waveform in WAVEFORM_TYPES:
             self.config['waveform_type'] = waveform
-            print(f"悅耳進度條：波形類型設為 {WAVEFORM_TYPES[waveform]}")
     
     def get_volume(self):
         """獲取音量"""
@@ -223,7 +216,6 @@ class SineProgressConfig:
         """設置音量"""
         if volume in VOLUME_OPTIONS:
             self.config['volume'] = volume
-            print(f"悅耳進度條：音量設為 {volume}")
     
     def get_min_frequency(self):
         """獲取起點頻率（低頻）"""
@@ -233,7 +225,6 @@ class SineProgressConfig:
         """設置起點頻率（低頻）"""
         if frequency in MIN_FREQUENCY_OPTIONS:
             self.config['min_frequency'] = frequency
-            print(f"悅耳進度條：起點頻率設為 {frequency}Hz")
     
     def get_max_frequency(self):
         """獲取終點頻率（高頻）"""
@@ -243,7 +234,6 @@ class SineProgressConfig:
         """設置終點頻率（高頻）"""
         if frequency in MAX_FREQUENCY_OPTIONS:
             self.config['max_frequency'] = frequency
-            print(f"悅耳進度條：終點頻率設為 {frequency}Hz")
     
     def get_frequency_range(self):
         """獲取頻率範圍"""
@@ -283,7 +273,7 @@ class SineProgressConfig:
         if config_changed:
             # 驗證頻率範圍
             if self.get_min_frequency() >= self.get_max_frequency():
-                print("悅耳進度條：警告：起點頻率不能大於等於終點頻率")
+                log.warning("悅耳進度條：起點頻率不能大於等於終點頻率")
                 return False
             
             self.save_config()
@@ -295,7 +285,6 @@ class SineProgressConfig:
         """重置為預設配置"""
         self._apply_default_config()
         self.save_config()
-        print("悅耳進度條：已重置為預設配置")
 
 # 全局配置實例
 sine_progress_config = SineProgressConfig()

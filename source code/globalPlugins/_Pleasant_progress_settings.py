@@ -8,6 +8,7 @@ from gui.settingsDialogs import SettingsPanel
 import os
 import gettext
 import languageHandler
+from logHandler import log
 from ._pleasant_progressconfig import (
     sine_progress_config,
     FADE_ALGORITHMS,
@@ -79,6 +80,8 @@ FADE_ALGORITHMS_TRANSLATED = {
     'cosine': addonGettext('余弦'),
     'gaussian': addonGettext('高斯')
 }
+
+TEST_PERCENTAGES = tuple(range(0, 101, 10))
 
 class SineProgressSettingsPanel(SettingsPanel):
     """悅耳進度條設定面板"""
@@ -195,6 +198,21 @@ class SineProgressSettingsPanel(SettingsPanel):
         # 綁定頻率選擇變更事件，用於驗證
         self.min_frequency_choice.Bind(wx.EVT_CHOICE, self.onFrequencyChange)
         self.max_frequency_choice.Bind(wx.EVT_CHOICE, self.onFrequencyChange)
+
+        # 測試百分比和預覽按鈕
+        test_percentage_label = addonGettext("測試百分比(&P)：")
+        test_percentage_choices = [f"{percentage}%" for percentage in TEST_PERCENTAGES]
+        self.test_percentage_choice = settingsSizerHelper.addLabeledControl(
+            test_percentage_label,
+            wx.Choice,
+            choices=test_percentage_choices
+        )
+        self.test_percentage_choice.SetSelection(TEST_PERCENTAGES.index(50))
+
+        test_sound_button = settingsSizerHelper.addItem(
+            wx.Button(self, label=addonGettext("測試音效(&T)"))
+        )
+        test_sound_button.Bind(wx.EVT_BUTTON, self.onTestSound)
         
         # 恢復到預設值按鈕
         restore_defaults_button = settingsSizerHelper.addItem(
@@ -236,10 +254,8 @@ class SineProgressSettingsPanel(SettingsPanel):
             duration_index = AUDIO_DURATION_OPTIONS.index(default_duration)
             self.duration_choice.SetSelection(duration_index)
 
-            print("悅耳進度條：UI已重置為預設值，用戶可選擇是否保存")
-            
         except Exception as e:
-            print(f"悅耳進度條：重置UI到預設值時發生錯誤: {e}")
+            log.error("悅耳進度條：重置UI到預設值時發生錯誤: %s", e)
     
     def onFrequencyChange(self, event):
         """頻率選擇變更事件處理"""
@@ -262,6 +278,56 @@ class SineProgressSettingsPanel(SettingsPanel):
                 )
         
         event.Skip()
+
+    def onTestSound(self, event):
+        """使用面板中目前選取但尚未儲存的設定播放測試音效。"""
+        if not self.isValid():
+            return
+
+        try:
+            percentage_index = self.test_percentage_choice.GetSelection()
+            percentage = TEST_PERCENTAGES[percentage_index]
+            waveform = list(WAVEFORM_TYPES.keys())[self.waveform_choice.GetSelection()]
+            fade_algorithm = list(FADE_ALGORITHMS.keys())[
+                self.fade_algorithm_choice.GetSelection()
+            ]
+            volume = VOLUME_OPTIONS[self.volume_choice.GetSelection()]
+            min_frequency = MIN_FREQUENCY_OPTIONS[
+                self.min_frequency_choice.GetSelection()
+            ]
+            max_frequency = MAX_FREQUENCY_OPTIONS[
+                self.max_frequency_choice.GetSelection()
+            ]
+            audio_duration = AUDIO_DURATION_OPTIONS[self.duration_choice.GetSelection()]
+
+            import globalPluginHandler
+
+            for plugin in globalPluginHandler.runningPlugins:
+                preview = getattr(plugin, 'preview_progress_percentage', None)
+                if callable(preview):
+                    if preview(
+                        percentage=percentage,
+                        waveform_type=waveform,
+                        fade_algorithm=fade_algorithm,
+                        volume=volume,
+                        min_frequency=min_frequency,
+                        max_frequency=max_frequency,
+                        audio_duration=audio_duration
+                    ):
+                        return
+                    break
+
+            self._show_test_sound_error()
+        except Exception as e:
+            log.error("悅耳進度條：播放測試音效時發生錯誤: %s", e)
+            self._show_test_sound_error()
+
+    def _show_test_sound_error(self):
+        gui.messageBox(
+            addonGettext("無法播放測試音效，請檢查音頻輸出後再試一次。"),
+            addonGettext("測試音效不可用"),
+            wx.OK | wx.ICON_WARNING
+        )
     
     def isValid(self):
         """驗證設定是否有效"""
@@ -336,7 +402,6 @@ class SineProgressSettingsPanel(SettingsPanel):
             )
             
             if success:
-                print("悅耳進度條：設定已保存，準備重新初始化")
                 # 通知主插件重新初始化
                 self._notify_plugin_reload()
             else:
@@ -345,8 +410,6 @@ class SineProgressSettingsPanel(SettingsPanel):
                     "保存錯誤",
                     wx.OK | wx.ICON_ERROR
                 )
-        else:
-            print("悅耳進度條：設定無變更")
     
     def _notify_plugin_reload(self):
         """通知主插件重新載入配置"""
@@ -358,24 +421,21 @@ class SineProgressSettingsPanel(SettingsPanel):
             for plugin in globalPluginHandler.runningPlugins:
                 if hasattr(plugin, 'reload_configuration'):
                     plugin.reload_configuration()
-                    print("悅耳進度條：已通知主插件重新載入配置")
                     break
             else:
-                print("悅耳進度條：未找到主插件實例")
+                log.warning("悅耳進度條：未找到主插件實例")
                 
         except Exception as e:
-            print(f"悅耳進度條：通知主插件重新載入時發生錯誤: {e}")
+            log.error("悅耳進度條：通知主插件重新載入時發生錯誤: %s", e)
     
     def onDiscard(self):
         """放棄變更時的處理"""
-        print("悅耳進度條：用戶放棄了設定變更")
+        pass
     
     def onPanelActivated(self):
         """面板啟動時的處理"""
-        print("悅耳進度條：設定面板已開啟")
         super().onPanelActivated()
     
     def onPanelDeactivated(self):
         """面板停用時的處理"""
-        print("悅耳進度條：設定面板已關閉")
         super().onPanelDeactivated()

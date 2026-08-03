@@ -51,6 +51,19 @@ msgstr "&Restore defaults"
 msgid "波形長度(&D)："
 msgstr "&Duration:"
 
+# Test sound controls
+msgid "測試百分比(&P)："
+msgstr "Test &percentage:"
+
+msgid "測試音效(&T)"
+msgstr "&Test tone"
+
+msgid "無法播放測試音效，請檢查音頻輸出後再試一次。"
+msgstr "The test tone could not be played. Check the audio output and try again."
+
+msgid "測試音效不可用"
+msgstr "Test tone unavailable"
+
 # 波形類型選項
 msgid "正弦波"
 msgstr "Sine wave"

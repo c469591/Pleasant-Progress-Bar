@@ -5,6 +5,7 @@ import threading
 import time
 import wx
 import ui
+from logHandler import log
 
 class NVDADeviceMonitor:
     """NVDA音頻設備監聽器"""
@@ -39,19 +40,13 @@ class NVDADeviceMonitor:
             
             if hasattr(versionInfo, 'version_year') and versionInfo.version_year >= 2025:
                 self.audio_config_section = config.conf["audio"]
-                config_path = "config.conf['audio']['outputDevice']"
             else:
                 self.audio_config_section = config.conf["speech"]
-                config_path = "config.conf['speech']['outputDevice']"
             
             self.last_audio_device = self.audio_config_section.get("outputDevice", "default")
             
-            if self.debug_mode:
-                print(f"NVDADeviceMonitor: 配置路徑 = {config_path}")
-                print(f"NVDADeviceMonitor: 當前設備 = '{self.last_audio_device}'")
-            
         except Exception as e:
-            print(f"NVDADeviceMonitor: 設置監聽失敗 - {e}")
+            log.error("NVDADeviceMonitor: 設置監聽失敗 - %s", e)
             self.audio_config_section = None
             self.last_audio_device = None
 
@@ -87,25 +82,19 @@ class NVDADeviceMonitor:
                         # 建立名稱到索引的映射緩存
                         device_name = device_info.get('name', f'Device {i}')
                         self.device_cache[device_name] = i
-                        
-                        if self.debug_mode:
-                            print(f"NVDADeviceMonitor: 發現輸出設備 {i}: {device_name}")
                 
                 except Exception as e:
                     if self.debug_mode:
-                        print(f"NVDADeviceMonitor: 獲取設備 {i} 信息失敗: {e}")
+                        log.warning("NVDADeviceMonitor: 獲取設備 %s 信息失敗: %s", i, e)
             
             # 清理臨時實例
             if hasattr(temp_pyaudio, 'terminate'):
                 temp_pyaudio.terminate()
             
-            if self.debug_mode:
-                print(f"NVDADeviceMonitor: 設備列表刷新完成，找到 {len(self.pyaudio_device_list)} 個輸出設備")
-            
             return True
             
         except Exception as e:
-            print(f"NVDADeviceMonitor: 刷新設備列表失敗: {e}")
+            log.error("NVDADeviceMonitor: 刷新設備列表失敗: %s", e)
             return False
 
     def refresh_device_list(self):
@@ -132,13 +121,10 @@ class NVDADeviceMonitor:
             
             temp_pyaudio.terminate()
             
-            if self.debug_mode:
-                print(f"NVDADeviceMonitor: 設備列表刷新完成，找到 {len(self.pyaudio_device_list)} 個輸出設備")
-            
             return True
             
         except Exception as e:
-            print(f"NVDADeviceMonitor: 刷新設備列表失敗: {e}")
+            log.error("NVDADeviceMonitor: 刷新設備列表失敗: %s", e)
             return False
 
     def scan_devices_by_host_api_priority(self, temp_pyaudio):
@@ -162,16 +148,8 @@ class NVDADeviceMonitor:
                     else:
                         host_api_priority.append(api_index)
             
-            if self.debug_mode:
-                api_names = [temp_pyaudio.host_apis[i]['name'] for i in host_api_priority]
-                print(f"NVDADeviceMonitor: 設備掃描順序: {api_names}")
-            
             # 按優先級掃描設備
             for api_index in host_api_priority:
-                api_name = temp_pyaudio.host_apis[api_index]['name']
-                if self.debug_mode:
-                    print(f"NVDADeviceMonitor: 掃描 {api_name} (Host API {api_index})")
-                
                 devices = temp_pyaudio.get_devices_by_host_api(api_index)
                 
                 for device in devices:
@@ -186,12 +164,9 @@ class NVDADeviceMonitor:
                             
                             self.pyaudio_device_list.append(device_info)
                             self.device_cache[device_info['name']] = global_index
-                            
-                            if self.debug_mode:
-                                print(f"NVDADeviceMonitor: ✓ 設備 {global_index}: {device_info['name']} ({api_name})")
                         
         except Exception as e:
-            print(f"NVDADeviceMonitor: Host API優先級掃描失敗: {e}")
+            log.warning("NVDADeviceMonitor: Host API優先級掃描失敗: %s", e)
             self.scan_devices_simple(temp_pyaudio)
 
     def scan_devices_simple(self, temp_pyaudio):
@@ -205,12 +180,9 @@ class NVDADeviceMonitor:
                 if device_info and device_info.get('maxOutputChannels', 0) > 0:
                     self.pyaudio_device_list.append(device_info)
                     self.device_cache[device_info['name']] = i
-                    
-                    if self.debug_mode:
-                        print(f"NVDADeviceMonitor: 設備 {i}: {device_info['name']}")
                         
         except Exception as e:
-            print(f"NVDADeviceMonitor: 簡單掃描失敗: {e}")
+            log.error("NVDADeviceMonitor: 簡單掃描失敗: %s", e)
         
     def get_device_friendly_name(self, device_id):
         """根據設備ID獲取友好名稱 - 動態查找"""
@@ -263,7 +235,7 @@ class NVDADeviceMonitor:
             
         except Exception as e:
             if self.debug_mode:
-                print(f"NVDADeviceMonitor: 獲取友好名稱失敗: {e}")
+                log.warning("NVDADeviceMonitor: 獲取友好名稱失敗: %s", e)
             return "未知設備"
 
     def old_convert_nvda_device_to_pyaudio_index(self, nvda_device_id):
@@ -297,14 +269,11 @@ class NVDADeviceMonitor:
             # 簡化方案：返回默認設備索引，讓PyAudio自動處理
             # 在實際情況下可能需要更複雜的設備ID解析
             
-            if self.debug_mode:
-                print(f"NVDADeviceMonitor: 設備ID轉換 - NVDA: {nvda_device_id} -> PyAudio: 使用默認")
-            
             return None  # None表示使用PyAudio的默認設備
             
         except Exception as e:
             if self.debug_mode:
-                print(f"NVDADeviceMonitor: 設備ID轉換失敗: {e}")
+                log.warning("NVDADeviceMonitor: 設備ID轉換失敗: %s", e)
             return None
 
     def old_convert_nvda_device_to_pyaudio_index(self, nvda_device_id):
@@ -346,17 +315,15 @@ class NVDADeviceMonitor:
                                     # 找到匹配的設備，返回對應的PyAudio索引
                                     # 這裡需要將Windows設備索引映射到PyAudio索引
                                     # 簡化實現：假設索引順序一致
-                                    if self.debug_mode:
-                                        print(f"NVDADeviceMonitor: 找到匹配設備，Windows索引: {i} -> PyAudio索引: {i}")
                                     return i
                         
                         except Exception as com_error:
                             if self.debug_mode:
-                                print(f"NVDADeviceMonitor: COM接口查找設備失敗: {com_error}")
+                                log.warning("NVDADeviceMonitor: COM接口查找設備失敗: %s", com_error)
             
             except ImportError:
                 if self.debug_mode:
-                    print("NVDADeviceMonitor: comtypes不可用，無法使用Windows COM API")
+                    log.warning("NVDADeviceMonitor: comtypes不可用，無法使用Windows COM API")
             
             # 降級方案：嘗試通過設備名稱匹配（如果PyAudio提供了真實設備名稱）
             temp_pyaudio = self.pyaudio_instance_getter()
@@ -372,18 +339,18 @@ class NVDADeviceMonitor:
                     temp_pyaudio.terminate()
                 except Exception as e:
                     if self.debug_mode:
-                        print(f"NVDADeviceMonitor: 降級匹配失敗: {e}")
+                        log.warning("NVDADeviceMonitor: 降級匹配失敗: %s", e)
                     if hasattr(temp_pyaudio, 'terminate'):
                         temp_pyaudio.terminate()
             
             if self.debug_mode:
-                print(f"NVDADeviceMonitor: 無法轉換設備ID，使用默認設備 - NVDA: {nvda_device_id}")
+                log.warning("NVDADeviceMonitor: 無法轉換設備ID，使用默認設備 - NVDA: %s", nvda_device_id)
             
             return None  # 無法匹配，使用默認設備
             
         except Exception as e:
             if self.debug_mode:
-                print(f"NVDADeviceMonitor: 設備ID轉換錯誤: {e}")
+                log.warning("NVDADeviceMonitor: 設備ID轉換錯誤: %s", e)
             return None
 
     def convert_nvda_device_to_pyaudio_index(self, nvda_device_id):
@@ -403,13 +370,13 @@ class NVDADeviceMonitor:
                 return mapped_index
             
             if self.debug_mode:
-                print(f"NVDADeviceMonitor: 無法映射設備 {nvda_device_id}，使用默認")
+                log.warning("NVDADeviceMonitor: 無法映射設備 %s，使用默認", nvda_device_id)
             
             return None  # 找不到就用默認
             
         except Exception as e:
             if self.debug_mode:
-                print(f"NVDADeviceMonitor: 設備映射錯誤: {e}")
+                log.warning("NVDADeviceMonitor: 設備映射錯誤: %s", e)
             return None
 
     def try_guid_mapping(self, nvda_device_id):
@@ -428,9 +395,6 @@ class NVDADeviceMonitor:
                     guid_clean = guid.replace('{', '').replace('}', '')
                     guid_parts.append(guid_clean.lower())
             
-            if self.debug_mode:
-                print(f"NVDADeviceMonitor: 提取到的GUID部分: {guid_parts}")
-            
             # 動態查找設備映射
             best_match = None
             best_priority = -1
@@ -447,26 +411,18 @@ class NVDADeviceMonitor:
                 # Realtek設備檢測
                 if 'realtek' in device_name and ('digital' in device_name or 'spdif' in device_name):
                     matched = True
-                    if self.debug_mode:
-                        print(f"NVDADeviceMonitor: 找到Realtek設備候選: {device['name']}")
                 
                 # Universal Audio設備檢測
                 elif 'universal audio' in device_name and 'thunderbolt' in device_name:
                     matched = True
-                    if self.debug_mode:
-                        print(f"NVDADeviceMonitor: 找到Universal Audio設備候選: {device['name']}")
                 
                 # NVIDIA設備檢測
                 elif 'nvidia' in device_name and 'high definition' in device_name:
                     matched = True
-                    if self.debug_mode:
-                        print(f"NVDADeviceMonitor: 找到NVIDIA設備候選: {device['name']}")
                 
                 # 通用音頻設備檢測
                 elif any(keyword in device_name for keyword in ['speakers', 'headphones', 'audio', 'sound']):
                     matched = True
-                    if self.debug_mode:
-                        print(f"NVDADeviceMonitor: 找到通用音頻設備候選: {device['name']}")
                 
                 # 如果匹配且優先級更高，更新最佳匹配
                 if matched and host_api_priority > best_priority:
@@ -474,19 +430,13 @@ class NVDADeviceMonitor:
                     best_priority = host_api_priority
             
             if best_match:
-                if self.debug_mode:
-                    host_api = best_match.get('host_api_name', 'Unknown')
-                    print(f"NVDADeviceMonitor: *** 動態GUID映射成功: {best_match['name']} (索引:{best_match['index']}, API:{host_api}) ***")
                 return best_match['index']
-            
-            if self.debug_mode:
-                print("NVDADeviceMonitor: 動態GUID映射未找到匹配設備")
             
             return None
             
         except Exception as e:
             if self.debug_mode:
-                print(f"NVDADeviceMonitor: 動態GUID映射失敗: {e}")
+                log.warning("NVDADeviceMonitor: 動態GUID映射失敗: %s", e)
             return None
 
     def try_name_pattern_mapping(self, nvda_device_id):
@@ -506,9 +456,6 @@ class NVDADeviceMonitor:
                 device_type_hints.append('universal_audio')
             if 'nvidia' in nvda_id_lower:
                 device_type_hints.append('nvidia')
-            
-            if self.debug_mode:
-                print(f"NVDADeviceMonitor: 設備類型推斷: {device_type_hints}")
             
             # 根據推斷的設備類型尋找最佳匹配
             best_match = None
@@ -557,19 +504,13 @@ class NVDADeviceMonitor:
                     best_score = match_score
             
             if best_match and best_score > 0:
-                if self.debug_mode:
-                    host_api = best_match.get('host_api_name', 'Unknown')
-                    print(f"NVDADeviceMonitor: *** 動態名稱映射成功: {best_match['name']} (分數:{best_score}, API:{host_api}) ***")
                 return best_match['index']
-            
-            if self.debug_mode:
-                print("NVDADeviceMonitor: 動態名稱映射未找到匹配設備")
             
             return None
             
         except Exception as e:
             if self.debug_mode:
-                print(f"NVDADeviceMonitor: 動態名稱映射失敗: {e}")
+                log.warning("NVDADeviceMonitor: 動態名稱映射失敗: %s", e)
             return None        
         
     def get_current_nvda_output_device_index(self):
@@ -579,7 +520,7 @@ class NVDADeviceMonitor:
             return self.convert_nvda_device_to_pyaudio_index(current_device)
         except Exception as e:
             if self.debug_mode:
-                print(f"NVDADeviceMonitor: 獲取當前設備索引失敗: {e}")
+                log.warning("NVDADeviceMonitor: 獲取當前設備索引失敗: %s", e)
             return None
 
     def old_get_optimal_params_for_current_device(self):
@@ -611,9 +552,6 @@ class NVDADeviceMonitor:
                     optimal_rate = int(device_info.get('defaultSampleRate', 48000))
                     device_name = device_info.get('name', 'Unknown Device')
                     
-                    if self.debug_mode:
-                        print(f"NVDADeviceMonitor: 當前設備最佳參數 - 設備: {device_name}, 採樣率: {optimal_rate}Hz")
-                    
                     # 測試支持的格式（簡化版本）
                     import _portaudio as pa
                     preferred_formats = [pa.paInt16, pa.paInt24, pa.paFloat32]
@@ -632,7 +570,7 @@ class NVDADeviceMonitor:
             
         except Exception as e:
             if self.debug_mode:
-                print(f"NVDADeviceMonitor: 獲取設備最佳參數失敗: {e}")
+                log.warning("NVDADeviceMonitor: 獲取設備最佳參數失敗: %s", e)
         
         # 返回默認參數
         return {'sample_rate': 48000, 'format': None, 'device_index': device_index if 'device_index' in locals() else None}
@@ -648,9 +586,6 @@ class NVDADeviceMonitor:
             daemon=True
         )
         self.monitoring_thread.start()
-        
-        if self.debug_mode:
-            print("NVDADeviceMonitor: 監聽線程已啟動")
 
     def get_optimal_params_for_current_device(self):
         """為當前NVDA設備獲取最佳音頻參數"""
@@ -675,9 +610,6 @@ class NVDADeviceMonitor:
                     optimal_rate = int(device_info.get('defaultSampleRate', 48000))
                     device_name = device_info.get('name', 'Unknown Device')
                     
-                    if self.debug_mode:
-                        print(f"NVDADeviceMonitor: 當前設備最佳參數 - 設備: {device_name}, 採樣率: {optimal_rate}Hz")
-                    
                     # 測試支持的格式（簡化版本）
                     import _portaudio as pa
                     preferred_formats = [pa.paInt16, pa.paInt24, pa.paFloat32]
@@ -696,7 +628,7 @@ class NVDADeviceMonitor:
             
         except Exception as e:
             if self.debug_mode:
-                print(f"NVDADeviceMonitor: 獲取設備最佳參數失敗: {e}")
+                log.warning("NVDADeviceMonitor: 獲取設備最佳參數失敗: %s", e)
         
         # 返回默認參數
         return {'sample_rate': 48000, 'format': None, 'device_index': device_index if 'device_index' in locals() else None}    
@@ -706,9 +638,6 @@ class NVDADeviceMonitor:
         if self.monitoring_thread and self.thread_running:
             self.thread_running = False
             self.monitoring_thread.join(timeout=2.0)
-            
-            if self.debug_mode:
-                print("NVDADeviceMonitor: 監聽線程已停止")
     
     def _monitoring_worker(self):
         """監聽工作線程"""
@@ -736,7 +665,7 @@ class NVDADeviceMonitor:
                 
             except Exception as e:
                 if self.debug_mode:
-                    print(f"NVDADeviceMonitor: 監聽錯誤 - {e}")
+                    log.warning("NVDADeviceMonitor: 監聽錯誤 - %s", e)
                 time.sleep(1.0)
     
     def _check_device_change(self):
@@ -748,17 +677,12 @@ class NVDADeviceMonitor:
             current_device = self.audio_config_section.get("outputDevice", "default")
             
             if current_device != self.last_audio_device:
-                if self.debug_mode:
-                    print(f"NVDADeviceMonitor: 檢測到設備變更")
-                    print(f"  之前: '{self.last_audio_device}'")
-                    print(f"  當前: '{current_device}'")
-                
                 # 調用回調函數
                 if self.on_device_change_callback:
                     try:
                         self.on_device_change_callback(self.last_audio_device, current_device)
                     except Exception as e:
-                        print(f"NVDADeviceMonitor: 回調函數錯誤 - {e}")
+                        log.error("NVDADeviceMonitor: 回調函數錯誤 - %s", e)
                 
                 self.last_audio_device = current_device
                 return True
@@ -767,7 +691,7 @@ class NVDADeviceMonitor:
             
         except Exception as e:
             if self.debug_mode:
-                print(f"NVDADeviceMonitor: 檢查設備變更錯誤 - {e}")
+                log.warning("NVDADeviceMonitor: 檢查設備變更錯誤 - %s", e)
             return False
     
     def get_current_device(self):
