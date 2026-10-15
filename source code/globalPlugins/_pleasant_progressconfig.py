@@ -64,6 +64,7 @@ DEFAULT_CONFIG = {
     'min_frequency': 110,         # 起點頻率（低頻）
     'max_frequency': 1720,        # 終點頻率（高頻）
     'audio_duration': 0.08,       # 波形長度（秒）
+    'indent_duration': 150,       # 縮排提示音長度（毫秒）
 }
 
 # 可用選項定義 - 使用翻譯函數
@@ -91,6 +92,9 @@ MAX_FREQUENCY_OPTIONS = list(range(1200, 1801, 10))  # 1200到1750，每10Hz
 
 # 新增：生成波形長度選項（40到100毫秒，步進5毫秒）
 AUDIO_DURATION_OPTIONS = [round(i * 0.005, 3) for i in range(8, 21)]  # 0.040到0.100，步進0.005
+
+# 縮排提示音長度選項（毫秒）。NVDA 預設只有 40 毫秒，容易被隨後的語音蓋過
+INDENT_DURATION_OPTIONS = [40, 60, 80, 100, 120, 150, 200, 250, 300, 400, 500]
 
 class SineProgressConfig:
     """悅耳進度條配置管理類"""
@@ -195,6 +199,20 @@ class SineProgressConfig:
             self.config['audio_duration'] = duration
             print(f"悅耳進度條：波形長度設為 {duration*1000:.0f}ms")
 
+    def get_indent_duration(self):
+        """獲取縮排提示音長度（毫秒）"""
+        try:
+            duration = int(self.config.get('indent_duration', DEFAULT_CONFIG['indent_duration']))
+        except (ValueError, TypeError):
+            return DEFAULT_CONFIG['indent_duration']
+        return duration if duration in INDENT_DURATION_OPTIONS else DEFAULT_CONFIG['indent_duration']
+
+    def set_indent_duration(self, duration):
+        """設置縮排提示音長度（毫秒）"""
+        if duration in INDENT_DURATION_OPTIONS:
+            self.config['indent_duration'] = duration
+            print(f"悅耳進度條：縮排提示音長度設為 {duration}ms")
+
     def get_fade_algorithm(self):
         """獲取淡入淡出算法"""
         return self.config.get('fade_algorithm', DEFAULT_CONFIG['fade_algorithm'])
@@ -250,7 +268,8 @@ class SineProgressConfig:
         return self.get_min_frequency(), self.get_max_frequency()
     
     def update_config(self, fade_algorithm=None, waveform_type=None, volume=None, 
-                     min_frequency=None, max_frequency=None, audio_duration=None
+                     min_frequency=None, max_frequency=None, audio_duration=None,
+                     indent_duration=None
                      ):
         """批量更新配置"""
         config_changed = False
@@ -278,6 +297,10 @@ class SineProgressConfig:
         # 波形長度參數
         if audio_duration is not None:
             self.set_audio_duration(audio_duration)
+            config_changed = True
+
+        if indent_duration is not None:
+            self.set_indent_duration(indent_duration)
             config_changed = True
     
         if config_changed:

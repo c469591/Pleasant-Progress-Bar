@@ -1,4 +1,4 @@
-# Pleasant Progress Bar NVDA Add-on
+# Let It Beep NVDA Add-on
 
 Make NVDA's progress bar sound effects more pleasant and melodious, supporting multiple waveforms and custom configurations.
 
@@ -48,8 +48,8 @@ Theoretically supports all versions after 2019.3. Tested on NVDA 2026.1 (64-bit,
 1. Adjust the following settings according to personal preferences:
    * Waveform type: Choose your preferred waveform (sine wave is softest, square wave is crispest)
    * Fade algorithm: Cosine (classic) or Gaussian (smoother)
-   * Volume adjustment: 0.1 minimum to 1.0 maximum
-   * Waveform length: From 40 milliseconds to 100 milliseconds, default is 80 milliseconds, 40 milliseconds effect is closest to the original progress bar style,
+   * Volume adjustment for add-on beeps: 0.1 minimum to 1.0 maximum
+   * Separate beep length sliders for both progress bar and indentation beeps: From 40 milliseconds to 100 milliseconds, default is 80 milliseconds, 40 milliseconds effect is closest to the original progress bar style,
 but waveform lengths below 80 milliseconds may introduce popping sounds, which is a defect caused by 32-bit audio systems, and there is currently no method found to completely fix this
    * Start frequency (low frequency): 110Hz to 300Hz range
    * End frequency (high frequency): 1200Hz to 1750Hz range
@@ -106,6 +106,13 @@ c469591@mail.batol.net
 [Little Lamb Sharing Station](https://lamb.tw/)
 
 ## 📋 Changelog
+
+###V0.23
+
+* Add-on now continues to work when switchign audio devices
+* Custom beeps now also play for all NVDA beep calls (E.G. for capital letters, indentation levels, and any time another add-on beeps)
+* Added a separate beep length slider for indent level beeping
+* Beep volume is now effected by global NVDA audio volume
 
 ### V0.22
 

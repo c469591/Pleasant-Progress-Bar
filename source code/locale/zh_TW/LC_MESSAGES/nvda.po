@@ -76,3 +76,6 @@ msgstr "余弦"
 
 msgid "高斯"
 msgstr "高斯"
+
+msgid "縮排提示音長度(&I)："
+msgstr "縮排提示音長度(&I)："

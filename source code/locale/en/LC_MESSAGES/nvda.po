@@ -49,7 +49,7 @@ msgid "恢復到預設值(&R)"
 msgstr "&Restore defaults"
 
 msgid "波形長度(&D)："
-msgstr "&Duration:"
+msgstr "Progress bar beep &duration:"
 
 # 波形類型選項
 msgid "正弦波"
@@ -76,3 +76,6 @@ msgstr "Cosine"
 
 msgid "高斯"
 msgstr "Gaussian"
+
+msgid "縮排提示音長度(&I)："
+msgstr "&Indentation beep duration:"

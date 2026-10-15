@@ -16,6 +16,7 @@ from ._pleasant_progressconfig import (
     MIN_FREQUENCY_OPTIONS,
     MAX_FREQUENCY_OPTIONS,
     AUDIO_DURATION_OPTIONS,
+    INDENT_DURATION_OPTIONS,
     DEFAULT_CONFIG  # 直接導入預設配置
 )
 
@@ -158,6 +159,18 @@ class SineProgressSettingsPanel(SettingsPanel):
             default_index = AUDIO_DURATION_OPTIONS.index(0.08) if 0.08 in AUDIO_DURATION_OPTIONS else 8
             self.duration_choice.SetSelection(default_index)
 
+        # 縮排提示音長度
+        indent_duration_label = addonGettext("縮排提示音長度(&I)：")
+        indent_duration_choices = [f"{duration}ms" for duration in INDENT_DURATION_OPTIONS]
+        self.indent_duration_choice = settingsSizerHelper.addLabeledControl(
+            indent_duration_label,
+            wx.Choice,
+            choices=indent_duration_choices
+        )
+        self.indent_duration_choice.SetSelection(
+            INDENT_DURATION_OPTIONS.index(sine_progress_config.get_indent_duration())
+        )
+
         # 起點頻率（低頻）
         min_freq_label = addonGettext("起點頻率 - 低頻(&L)：")
         min_freq_choices = [f"{freq}Hz" for freq in MIN_FREQUENCY_OPTIONS]
@@ -235,6 +248,11 @@ class SineProgressSettingsPanel(SettingsPanel):
             default_duration = DEFAULT_CONFIG['audio_duration']
             duration_index = AUDIO_DURATION_OPTIONS.index(default_duration)
             self.duration_choice.SetSelection(duration_index)
+
+            # 縮排提示音長度
+            self.indent_duration_choice.SetSelection(
+                INDENT_DURATION_OPTIONS.index(DEFAULT_CONFIG['indent_duration'])
+            )
 
             print("悅耳進度條：UI已重置為預設值，用戶可選擇是否保存")
             
@@ -314,6 +332,9 @@ class SineProgressSettingsPanel(SettingsPanel):
         duration_index = self.duration_choice.GetSelection()
         selected_duration = AUDIO_DURATION_OPTIONS[duration_index]
 
+        # 獲取選中的縮排提示音長度
+        selected_indent_duration = INDENT_DURATION_OPTIONS[self.indent_duration_choice.GetSelection()]
+
         # 檢查配置是否有變更
         config_changed = (
             selected_waveform != sine_progress_config.get_waveform_type() or
@@ -321,7 +342,8 @@ class SineProgressSettingsPanel(SettingsPanel):
             selected_volume != sine_progress_config.get_volume() or
             selected_min_freq != sine_progress_config.get_min_frequency() or
             selected_max_freq != sine_progress_config.get_max_frequency() or
-            selected_duration != sine_progress_config.get_audio_duration()  # 新增
+            selected_duration != sine_progress_config.get_audio_duration() or
+            selected_indent_duration != sine_progress_config.get_indent_duration()
         )
         
         if config_changed:
@@ -332,7 +354,8 @@ class SineProgressSettingsPanel(SettingsPanel):
                 volume=selected_volume,
                 min_frequency=selected_min_freq,
                 max_frequency=selected_max_freq,
-                audio_duration=selected_duration  # 新增
+                audio_duration=selected_duration,
+                indent_duration=selected_indent_duration
             )
             
             if success:
